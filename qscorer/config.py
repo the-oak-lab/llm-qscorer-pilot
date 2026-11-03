@@ -35,7 +35,7 @@ class TimedOutMarker(BaseModel):
 
 
 class PromptConfig(BaseModel):
-    """What Gemini is told about how the questions were used. No numbers from the data."""
+    """What the model is told about how the questions were used. No numbers from the data."""
     system: str = "You are an expert in science education and the learning sciences."
     context: str = ("Students answered multiple-choice questions at a pretest and again during practice sessions spread over "
                     "several weeks. After each answer, students saw feedback and then moved on to other questions.")
@@ -47,7 +47,7 @@ class DatasetConfig(BaseModel):
     questions: Path
     phases: PhaseFilter
     prompt: PromptConfig = PromptConfig()
-    exclude: list[str] = Field(default_factory=list, description="question ids kept out of the Gemini stages (e.g. stems that reference a missing image)")
+    exclude: list[str] = Field(default_factory=list, description="question ids kept out of the model stages (e.g. stems that reference a missing image)")
     timed_out: TimedOutMarker | None = None
     student_column: str = "Anon Student Id"
     step_column: str = "Step Name"
@@ -82,12 +82,14 @@ class PairParams(BaseModel):
 
 
 class BaselineParams(BaseModel):
-    """Parameters of Stage 1: Gemini's direct, no-checklist predictions, one question per call."""
-    model: str = Field("gemini-3.8-flash", description="Gemini model id")
+    """Parameters of Stage 1: the model's direct, no-checklist predictions, one question per call."""
+    backend: Literal["gemini", "openrouter"] = Field("gemini", description="which API: gemini (google-genai, GEMINI_API_KEY) or openrouter (the OpenAI chat-completions format, OPENROUTER_API_KEY)")
+    base_url: str | None = Field(None, description="openrouter only: another server of the OpenAI format (default https://openrouter.ai/api/v1)")
+    model: str = Field("gemini-3.8-flash", description="model id on the backend (e.g. google/gemini-3.8-flash on OpenRouter)")
     prompts: list[Literal["improve", "known"]] = Field(["improve", "known"], description="the questions asked: the design's probability of improvement, and how many of 100 students already know the answer")
     samples: int = Field(3, ge=1, description="independent calls per question and prompt (each with its own seed)")
     temperature: float = Field(1.0, ge=0, description="sampling temperature; 1.0 is the model's default and the vendor's recommendation for Gemini 3 thinking models")
-    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="Gemini thinking level")
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="reasoning level")
     thoughts: bool = Field(True, description="ask for thought summaries and keep them per call")
     max_output_tokens: int = Field(4096, ge=64)
     concurrency: int = Field(8, ge=1, description="calls in flight at once")
@@ -100,10 +102,12 @@ class BaselineParams(BaseModel):
 
 class DiscoveryParams(BaseModel):
     """Parameters of Stage 2.2: feature discovery, one batch and condition per call."""
-    model: str = Field("gemini-3.8-flash", description="Gemini model id")
+    backend: Literal["gemini", "openrouter"] = Field("gemini", description="which API: gemini (google-genai, GEMINI_API_KEY) or openrouter (the OpenAI chat-completions format, OPENROUTER_API_KEY)")
+    base_url: str | None = Field(None, description="openrouter only: another server of the OpenAI format (default https://openrouter.ai/api/v1)")
+    model: str = Field("gemini-3.8-flash", description="model id on the backend (e.g. google/gemini-3.8-flash on OpenRouter)")
     samples: int = Field(2, ge=1, description="independent calls per batch and condition (each with its own seed)")
     temperature: float = Field(1.0, ge=0)
-    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="Gemini thinking level")
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="reasoning level")
     thoughts: bool = Field(True, description="ask for thought summaries and keep them per call")
     max_output_tokens: int = Field(24576, ge=64, description="the budget covers thinking and the answer together; a feature-discovery call thinks for 2,000 to 8,000 tokens")
     concurrency: int = Field(64, ge=1, description="calls in flight at once; a call takes about 35 s, so 64 gives about 110 calls a minute, far under the 20,000 requests and 20M tokens a minute allowed")
@@ -116,14 +120,16 @@ class DiscoveryParams(BaseModel):
 
 class CanonParams(BaseModel):
     """Parameters of Stage 2.3's normalisation: embedding, clustering, polarity and naming."""
-    embedding_model: str = Field("gemini-embedding-2", description="embedding model id")
+    backend: Literal["gemini", "openrouter"] = Field("gemini", description="which API: gemini (google-genai, GEMINI_API_KEY) or openrouter (the OpenAI chat-completions format, OPENROUTER_API_KEY)")
+    base_url: str | None = Field(None, description="openrouter only: another server of the OpenAI format (default https://openrouter.ai/api/v1)")
+    embedding_model: str = Field("gemini-embedding-2", description="embedding model id on the backend (e.g. google/gemini-embedding-2 on OpenRouter)")
     prefix: str = Field("task: clustering | query: ", description="the model's task instruction, put in front of every text")
     embed_batch: int = Field(100, ge=1, le=100, description="texts per embedding request (the API's maximum is 100)")
     embed_concurrency: int = Field(8, ge=1)
     k_max: int = Field(400, ge=2, description="largest number of clusters considered for the elbow")
     k_grid: list[int] = Field([10, 15, 20, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400], description="cuts at which the two-call stability is measured")
     stability_shuffles: int = Field(20, ge=1, description="shuffled pairings of calls for the stability baseline")
-    model: str = Field("gemini-3.8-flash", description="Gemini model for the polarity and naming calls")
+    model: str = Field("gemini-3.8-flash", description="model for the polarity and naming calls")
     thinking: Literal["minimal", "low", "medium", "high"] = "low"
     polarity_batch: int = Field(25, ge=1, description="raw features classified per polarity call")
     members_shown: int = Field(40, ge=5, description="cluster members shown to the naming call (a random sample when the cluster is larger)")

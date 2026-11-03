@@ -1,7 +1,7 @@
 """Stage 2.3 normalisation on one dataset: embed the raw features, cluster them, pick the cuts, classify polarity, name the clusters.
 
 Run:  uv run python scripts/run_canon.py --dataset spacing-exp4 [--discovery DIR] [--k-max 400] [--members-shown 40] [--concurrency 64]
-          [--seed 0] [--out results] [--tag NAME]
+          [--backend gemini|openrouter] [--base-url URL] [--model gemini-3.8-flash] [--embedding-model gemini-embedding-2] [--seed 0] [--out results] [--tag NAME]
 Out:  results/<dataset>/canon[-tag]/embeddings.npy, embedded.csv, linkage.npy, curves.csv, features.csv (text, polarity, cluster at each
       named cut), clusters-k<K>.csv and mapping-k<K>.csv per named cut, responses.jsonl (polarity and naming calls), summary.json
 Every step is cached in the folder, so a rerun does no call twice.
@@ -24,6 +24,10 @@ def main():
     ap.add_argument("--k-max", type=int, default=d.k_max)
     ap.add_argument("--members-shown", type=int, default=d.members_shown)
     ap.add_argument("--concurrency", type=int, default=d.concurrency)
+    ap.add_argument("--backend", choices=["gemini", "openrouter"], default=d.backend, help="gemini (GEMINI_API_KEY) or openrouter (OPENROUTER_API_KEY)")
+    ap.add_argument("--base-url", default=d.base_url, help="openrouter only: another server of the OpenAI format")
+    ap.add_argument("--model", default=d.model, help="model id on the backend, for the polarity and naming calls")
+    ap.add_argument("--embedding-model", default=d.embedding_model, help="embedding model id on the backend")
     ap.add_argument("--seed", type=int, default=d.seed)
     ap.add_argument("--out", default="results")
     ap.add_argument("--tag", default="")
@@ -33,7 +37,8 @@ def main():
     root = Path(args.out) / config.name
     discovery = Path(args.discovery) if args.discovery else root / "discovery"
     features = pd.read_csv(discovery / "features.csv")
-    params = CanonParams(k_max=args.k_max, members_shown=args.members_shown, concurrency=args.concurrency, seed=args.seed)
+    params = CanonParams(backend=args.backend, base_url=args.base_url, model=args.model, embedding_model=args.embedding_model, k_max=args.k_max,
+                         members_shown=args.members_shown, concurrency=args.concurrency, seed=args.seed)
     out = root / ("canon" + (f"-{args.tag}" if args.tag else ""))
     result = run_canon(config, params, features, out)
 

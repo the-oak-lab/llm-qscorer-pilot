@@ -33,7 +33,7 @@ import pandas as pd
 from qscorer.batches import CONDITIONS
 from qscorer.config import DatasetConfig, DiscoveryParams
 from qscorer.data import load_questions, render_question
-from qscorer.gemini import Job, parse
+from qscorer.llm import Job, make_backend, parse
 
 PROMPTS = {
     ("good", False): (
@@ -126,14 +126,6 @@ def build_prompt(members: pd.DataFrame, questions: dict[str, dict], condition: s
     return head + "\n\n\n" + task + "\n\n" + (LABELLED_OUTPUT if labels else "") + OUTPUT
 
 
-def call_config(params: DiscoveryParams, config: DatasetConfig, seed: int) -> dict:
-    thinking = {"thinking_level": params.thinking.upper()}
-    if params.thoughts:
-        thinking["include_thoughts"] = True
-    return {"system_instruction": config.prompt.system, "response_mime_type": "application/json", "response_json_schema": SCHEMA,
-            "temperature": params.temperature, "seed": seed, "max_output_tokens": params.max_output_tokens, "thinking_config": thinking}
-
-
 def select_batches(plan: pd.DataFrame, params: DiscoveryParams) -> pd.DataFrame:
     """The plan rows asked: all, or with `limit` the first `limit` batches of each kind in the first round."""
     if params.limit is None:
@@ -152,7 +144,8 @@ def build_jobs(plan: pd.DataFrame, questions: dict[str, dict], config: DatasetCo
                 continue
             prompt = build_prompt(members, questions, condition, config)
             for k in range(params.samples):
-                jobs.append(Job(f"{batch}|{condition}|{k}", prompt, call_config(params, config, k)))
+                jobs.append(Job(f"{batch}|{condition}|{k}", prompt, system=config.prompt.system, schema=SCHEMA, temperature=params.temperature, seed=k,
+                                max_output_tokens=params.max_output_tokens, thinking=params.thinking, thoughts=params.thoughts))
     return jobs
 
 
@@ -278,7 +271,7 @@ def summarise(calls: pd.DataFrame, features: pd.DataFrame, attributions: pd.Data
         "features_per_call": ok.n_features.value_counts().sort_index().to_dict() if len(ok) else {},
         "evidence_found": float(attributions.evidence_found.mean()) if len(attributions) else None,
         "per_condition": per_condition,
-        "versions": {"python": platform.python_version(), **{p: metadata.version(p) for p in ("google-genai", "pandas")}},
+        "versions": {"python": platform.python_version(), "pandas": metadata.version("pandas")},
         "run_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
     }
 
@@ -291,17 +284,15 @@ def run_discovery(config: DatasetConfig, params: DiscoveryParams, plan: pd.DataF
     jobs = build_jobs(plan, questions, config, params)
     out.mkdir(parents=True, exist_ok=True)
     log = out / "responses.jsonl"
-    if engine is None:
-        from qscorer.gemini import run
-        records = run(jobs, log, params.model, params.concurrency, params.delay, params.timeout, params.passes, accept, progress)
-    else:
-        records = engine.many(jobs, log, params.passes, accept, progress)
+    engine = engine or make_backend(params)
+    records = engine.many(jobs, log, params.passes, accept, progress)
     calls, features, attributions = tables(last_records(log) | records, jobs, plan, questions)
     summary = summarise(calls, features, attributions, config, params, jobs)
+    summary["backend"] = engine.describe()
     examples = []
     for condition in ("E1", "E7"):
         job = next((j for j in jobs if j.id.split("|")[1] == condition), None)
         if job:
             examples.append(f"=== {job.id} ===\nmodel: {params.model}\nsystem: {config.prompt.system}\nconfig (seed = sample index): "
-                            f"{json.dumps({k: v for k, v in job.config.items() if k not in ('system_instruction', 'response_json_schema')})}\n\n{job.contents}")
+                            f"{json.dumps(job.settings())}\n\n{job.prompt}")
     return DiscoveryResult(calls, features, attributions, summary, "\n\n".join(examples))

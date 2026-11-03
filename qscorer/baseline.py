@@ -29,7 +29,7 @@ from scipy.stats import rankdata, spearmanr
 
 from qscorer.config import BaselineParams, DatasetConfig
 from qscorer.data import load_questions, render_question
-from qscorer.gemini import Job, parse
+from qscorer.llm import Job, make_backend, parse
 
 TASKS = {
     "improve": ("Your task:\nGiven the features of the question and its feedback, estimate how many students (out of 100) will "
@@ -56,14 +56,6 @@ def build_prompt(q: dict, task: str, config: DatasetConfig) -> str:
     return head + "\n\n\n" + TASKS[task] + "\n\n" + FORMAT  # two blank lines set the task apart from the feedback
 
 
-def call_config(params: BaselineParams, config: DatasetConfig, seed: int) -> dict:
-    thinking = {"thinking_level": params.thinking.upper()}
-    if params.thoughts:
-        thinking["include_thoughts"] = True
-    return {"system_instruction": config.prompt.system, "response_mime_type": "application/json", "response_json_schema": SCHEMA,
-            "temperature": params.temperature, "seed": seed, "max_output_tokens": params.max_output_tokens, "thinking_config": thinking}
-
-
 def select_questions(questions: dict[str, dict], config: DatasetConfig, params: BaselineParams, sets: pd.Series | None) -> list[str]:
     """The ids asked: the bank minus `config.exclude`; with `limit`, that many spread over the
     item sets in turn (shuffled within set by `seed`)."""
@@ -84,7 +76,8 @@ def select_questions(questions: dict[str, dict], config: DatasetConfig, params: 
 
 
 def build_jobs(questions: dict[str, dict], ids: list[str], config: DatasetConfig, params: BaselineParams) -> list[Job]:
-    return [Job(f"{qid}|{task}|{k}", build_prompt(questions[qid], task, config), call_config(params, config, k))
+    return [Job(f"{qid}|{task}|{k}", build_prompt(questions[qid], task, config), system=config.prompt.system, schema=SCHEMA, temperature=params.temperature,
+                seed=k, max_output_tokens=params.max_output_tokens, thinking=params.thinking, thoughts=params.thoughts)
             for qid in ids for task in params.prompts for k in range(params.samples)]
 
 
@@ -207,11 +200,8 @@ def run_baseline(config: DatasetConfig, params: BaselineParams, out: Path, slope
     jobs = build_jobs(questions, ids, config, params)
     out.mkdir(parents=True, exist_ok=True)
     log = out / "responses.jsonl"
-    if engine is None:
-        from qscorer.gemini import run
-        records = run(jobs, log, params.model, params.concurrency, params.delay, params.timeout, params.passes, accept, progress)
-    else:
-        records = engine.many(jobs, log, params.passes, accept, progress)
+    engine = engine or make_backend(params)
+    records = engine.many(jobs, log, params.passes, accept, progress)
     samples = sample_table(records, jobs)
     ratings = rating_table(samples)
     evaluation = evaluate(ratings, slopes, pairs_questions, params.seed)
@@ -225,10 +215,10 @@ def run_baseline(config: DatasetConfig, params: BaselineParams, out: Path, slope
         "answers": {task: {"mean": float(g.answer.mean()), "sd_between_questions": float(g.groupby("id").answer.mean().std(ddof=1))}
                     for task, g in ok.groupby("prompt")},
         "consistency": consistency(samples),
-        "versions": {"python": platform.python_version(), **{p: metadata.version(p) for p in ("google-genai", "pandas")}},
+        "backend": engine.describe(), "versions": {"python": platform.python_version(), "pandas": metadata.version("pandas")},
         "run_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
     }
     example = "\n\n".join(f"=== {task} ===\nmodel: {params.model}\nsystem: {config.prompt.system}\nconfig (seed = sample index): "
-                          f"{json.dumps({k: v for k, v in call_config(params, config, 0).items() if k != 'system_instruction'})}\n\n"
+                          f"{json.dumps(jobs[0].settings() | {'schema': SCHEMA})}\n\n"
                           f"{build_prompt(questions[ids[0]], task, config)}" for task in params.prompts)
     return BaselineResult(samples, ratings, evaluation, summary, example)

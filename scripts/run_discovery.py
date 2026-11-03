@@ -1,6 +1,6 @@
 """Stage 2.2 on one dataset: feature discovery on the planned batches, one batch and condition per call.
 
-Run:  uv run python scripts/run_discovery.py --dataset spacing-exp4 [--limit 2] [--samples 2] [--model gemini-3.8-flash]
+Run:  uv run python scripts/run_discovery.py --dataset spacing-exp4 [--limit 2] [--samples 2] [--backend gemini|openrouter] [--base-url URL] [--model gemini-3.8-flash]
           [--temperature 1.0] [--thinking medium] [--no-thoughts] [--concurrency 8] [--passes 3] [--seed 0] [--out results] [--tag NAME] [--dry-run]
 Out:  results/<dataset>/discovery[-tag]/responses.jsonl (raw, resumable), calls.csv, features.csv, attributions.csv, summary.json,
       prompt-example.txt
@@ -24,7 +24,9 @@ def main():
     ap.add_argument("--dataset", required=True)
     ap.add_argument("--limit", type=int, default=None, help="ask only this many batches of each kind, from the first round (pilots)")
     ap.add_argument("--samples", type=int, default=d.samples)
-    ap.add_argument("--model", default=d.model)
+    ap.add_argument("--backend", choices=["gemini", "openrouter"], default=d.backend, help="gemini (GEMINI_API_KEY) or openrouter (OPENROUTER_API_KEY)")
+    ap.add_argument("--base-url", default=d.base_url, help="openrouter only: another server of the OpenAI format")
+    ap.add_argument("--model", default=d.model, help="model id on the backend")
     ap.add_argument("--temperature", type=float, default=d.temperature)
     ap.add_argument("--thinking", choices=["minimal", "low", "medium", "high"], default=d.thinking)
     ap.add_argument("--no-thoughts", action="store_true")
@@ -37,7 +39,7 @@ def main():
     args = ap.parse_args()
 
     config = load_dataset_config(args.dataset)
-    params = DiscoveryParams(model=args.model, samples=args.samples, temperature=args.temperature, thinking=args.thinking, thoughts=not args.no_thoughts,
+    params = DiscoveryParams(backend=args.backend, base_url=args.base_url, model=args.model, samples=args.samples, temperature=args.temperature, thinking=args.thinking, thoughts=not args.no_thoughts,
                              concurrency=args.concurrency, passes=args.passes, limit=args.limit, seed=args.seed)
     root = Path(args.out) / config.name
     plan = pd.read_csv(root / "batches" / "batches.csv")
@@ -46,9 +48,9 @@ def main():
     if args.dry_run:
         chosen = select_batches(plan, params)
         jobs = build_jobs(chosen, load_questions(config.questions), config, params)
-        print(f"{config.name}: {chosen.batch.nunique()} batches, {len(jobs)} calls to {params.model} ({params.samples} per batch and condition); would write {out}/")
+        print(f"{config.name}: {chosen.batch.nunique()} batches, {len(jobs)} calls to {params.model} on {params.backend} ({params.samples} per batch and condition); would write {out}/")
         shown = next(j for j in jobs if j.id.split("|")[1] == "E7")
-        print(f"\n--- {shown.id} ---\n{shown.contents}\n--- config ---\n{json.dumps({k: v for k, v in shown.config.items() if k not in ('system_instruction', 'response_json_schema')})}")
+        print(f"\n--- {shown.id} ---\n{shown.prompt}\n--- settings ---\n{json.dumps(shown.settings())}")
         return
 
     result = run_discovery(config, params, plan, out)

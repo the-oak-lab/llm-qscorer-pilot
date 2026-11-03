@@ -9,7 +9,7 @@ from qscorer.baseline import (accept, build_jobs, build_prompt, consistency, eva
                               select_questions)
 from qscorer.data import render_feedback
 from qscorer.config import BaselineParams, DatasetConfig, PhaseFilter
-from qscorer.gemini import Job, parse
+from qscorer.llm import Job, parse
 
 CONFIG = DatasetConfig(name="fake", transactions="x.txt", questions="x.jsonl", phases=PhaseFilter(practice="^learning$"), exclude=["q3"])
 Q = {f"q{i}": {"id": f"q{i}", "question": {"stem": f"What is {i} + {i}?", "choices": [{"label": "a", "text": str(2 * i)}, {"label": "b", "text": "0"},
@@ -29,6 +29,9 @@ class FakeEngine:
     """Answers improve with the question number and known against it; q5 fails once, then works."""
     def __init__(self):
         self.calls = 0
+
+    def describe(self):
+        return {"backend": "fake"}
 
     def many(self, jobs, log, passes, accept, progress):
         done = {}
@@ -57,8 +60,8 @@ def test_prompt_and_jobs():
     ids = select_questions(Q, CONFIG, params, None)
     assert ids == ["q1", "q2", "q4", "q5", "q6"]  # q3 excluded
     jobs = build_jobs(Q, ids, CONFIG, params)
-    assert len(jobs) == 5 * 2 * 2 and jobs[0].id == "q1|improve|0" and jobs[1].config["seed"] == 1
-    assert jobs[0].config["thinking_config"] == {"thinking_level": "MEDIUM", "include_thoughts": True} and jobs[0].config["response_mime_type"] == "application/json"
+    assert len(jobs) == 5 * 2 * 2 and jobs[0].id == "q1|improve|0" and jobs[1].seed == 1
+    assert jobs[0].thinking == "medium" and jobs[0].thoughts and jobs[0].schema is not None and jobs[0].system == CONFIG.prompt.system
     sets = pd.Series({"q1": "s1", "q2": "s1", "q4": "s2", "q5": "s2", "q6": "s2"})
     few = select_questions(Q, CONFIG, BaselineParams(limit=2), sets)
     assert len(few) == 2 and sets[few[0]] == "s1" and sets[few[1]] == "s2"  # spread over sets

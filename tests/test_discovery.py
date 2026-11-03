@@ -6,7 +6,7 @@ import pandas as pd
 from qscorer.batches import BatchParams, plan_batches
 from qscorer.config import DatasetConfig, DiscoveryParams, PhaseFilter
 from qscorer.discovery import accept, build_jobs, build_prompt, evidence_found, normalise, parse_features, run_discovery, select_batches, shown_label
-from qscorer.gemini import parse
+from qscorer.llm import parse
 from tests.test_baseline import FakeEngine, raw
 
 CONFIG = DatasetConfig(name="fake", transactions="x.txt", questions="x.jsonl", phases=PhaseFilter(practice="^learning$"))
@@ -26,6 +26,9 @@ class Engine:
     """Names one feature in every call, attributed to questions 1 and 2 with a real quote and a made-up one; E3 calls fail once."""
     def __init__(self):
         self.calls = 0
+
+    def describe(self):
+        return {"backend": "fake"}
 
     def many(self, jobs, log, passes, accept, progress):
         done = {}
@@ -60,7 +63,7 @@ def test_prompts_and_jobs():
     assert "impede improvement" in build_prompt(good, Q, "E2", CONFIG) and "LOW-LEARNING questions show less improvement" in build_prompt(mixed, Q, "E8", CONFIG)
     jobs = build_jobs(PLAN, Q, CONFIG, DiscoveryParams(samples=2))
     assert len(jobs) == 2 * 2 * (4 * 6 + 2 * 2 + 2 * 2)   # 2 rounds x 2 samples x (4 mixed batches x 6 conditions + 2 good x 2 + 2 bad x 2)
-    assert jobs[0].id.endswith("|0") and jobs[1].config["seed"] == 1 and jobs[0].config["max_output_tokens"] == 24576
+    assert jobs[0].id.endswith("|0") and jobs[1].seed == 1 and jobs[0].max_output_tokens == 24576
     few = select_batches(PLAN, DiscoveryParams(limit=1))
     assert few["round"].eq(1).all() and few.batch.nunique() == 3 and set(few.kind) == {"mixed", "good", "bad"}
 

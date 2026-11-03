@@ -26,7 +26,6 @@ observable as two canonical features of one cluster.
 """
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import json
 from dataclasses import dataclass
@@ -37,7 +36,7 @@ import pandas as pd
 from scipy.cluster.hierarchy import fcluster, linkage
 
 from qscorer.config import CanonParams, DatasetConfig
-from qscorer.gemini import Job, parse
+from qscorer.llm import Job, make_backend, parse
 
 KEY = ["batch", "condition", "sample", "feature"]
 
@@ -77,7 +76,7 @@ def feature_text(features: pd.DataFrame) -> pd.Series:
     return features.name.fillna("").str.strip() + ": " + features.definition.fillna("").str.strip()
 
 
-def embed(features: pd.DataFrame, params: CanonParams, out: Path, progress=print, client=None) -> np.ndarray:
+def embed(features: pd.DataFrame, params: CanonParams, out: Path, engine, progress=print) -> np.ndarray:
     """The unit-norm vectors of the raw features, cached in `out/embeddings.npy` with the keys
     they belong to in `out/embedded.csv`."""
     cache, keys = out / "embeddings.npy", out / "embedded.csv"
@@ -88,13 +87,7 @@ def embed(features: pd.DataFrame, params: CanonParams, out: Path, progress=print
             progress(f"embeddings: {len(X)} cached")
             return X
     texts = feature_text(features).tolist()
-    if client is None:
-        from google import genai
-        from qscorer.gemini import api_key, embed_many
-        client = genai.Client(api_key=api_key())
-        vectors = asyncio.run(embed_many(client, params.embedding_model, texts, params.embed_batch, params.embed_concurrency, params.prefix, progress))
-    else:
-        vectors = client.embed(texts)
+    vectors = engine.embed(texts, params.embedding_model, params.embed_batch, params.embed_concurrency, params.prefix, progress)
     X = np.asarray(vectors, dtype=np.float32)
     X /= np.maximum(np.linalg.norm(X, axis=1, keepdims=True), 1e-12)
     np.save(cache, X)
@@ -154,14 +147,13 @@ def polarity_jobs(features: pd.DataFrame, params: CanonParams, config: DatasetCo
     jobs = []
     for start in range(0, len(texts), params.polarity_batch):
         items = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts[start:start + params.polarity_batch]))
-        jobs.append(Job(f"polarity|{start}", POLARITY_PROMPT.format(items=items), gemini_config(params, config, POLARITY_SCHEMA, seed=0)))
+        jobs.append(job(f"polarity|{start}", POLARITY_PROMPT.format(items=items), POLARITY_SCHEMA, params, config))
     return jobs
 
 
-def gemini_config(params: CanonParams, config: DatasetConfig, schema: dict, seed: int) -> dict:
-    return {"system_instruction": config.prompt.system, "response_mime_type": "application/json", "response_json_schema": schema,
-            "temperature": params.temperature, "seed": seed, "max_output_tokens": params.max_output_tokens,
-            "thinking_config": {"thinking_level": params.thinking.upper(), "include_thoughts": True}}
+def job(id: str, prompt: str, schema: dict, params: CanonParams, config: DatasetConfig) -> Job:
+    return Job(id, prompt, system=config.prompt.system, schema=schema, temperature=params.temperature, seed=0,
+               max_output_tokens=params.max_output_tokens, thinking=params.thinking)
 
 
 def parse_polarities(text: str | None, n: int) -> dict[int, str] | None:
@@ -194,7 +186,7 @@ def naming_jobs(features: pd.DataFrame, labels: np.ndarray, k: int, params: Cano
         shown = members if len(members) <= params.members_shown else np.sort(rng.choice(members, params.members_shown, replace=False))
         items = "\n".join(f"- {texts[i]}" for i in shown)
         sampled = f" (a sample of {len(members)} such descriptions)" if len(members) > len(shown) else ""
-        jobs.append(Job(f"name|{k}|{c}", NAMING_PROMPT.format(shown=len(shown), sampled=sampled, items=items), gemini_config(params, config, NAMING_SCHEMA, seed=0)))
+        jobs.append(job(f"name|{k}|{c}", NAMING_PROMPT.format(shown=len(shown), sampled=sampled, items=items), NAMING_SCHEMA, params, config))
     return jobs
 
 
@@ -216,11 +208,13 @@ def accept_name(raw: dict) -> bool:
 
 
 def run_canon(config: DatasetConfig, params: CanonParams, features: pd.DataFrame, out: Path, engine=None, progress=print) -> CanonResult:
-    """The four steps. `engine`, for tests, provides `embed(texts)` and `many(jobs, log, passes, accept, progress)`."""
+    """The four steps. `engine` is the backend (default: the one `params` names); a test double provides
+    `embed(texts, ...)`, `many(jobs, log, passes, accept, progress)` and `describe()`."""
     out.mkdir(parents=True, exist_ok=True)
+    engine = engine or make_backend(params)
     features = features.reset_index(drop=True)
     rng = np.random.default_rng(params.seed)
-    X = embed(features, params, out, progress, client=engine)
+    X = embed(features, params, out, engine, progress)
     Z = linkage(X, method="ward")
     np.save(out / "linkage.npy", Z)
     curves = dispersion_curve(Z, params.k_max)
@@ -237,12 +231,7 @@ def run_canon(config: DatasetConfig, params: CanonParams, features: pd.DataFrame
     progress(f"clusters: elbow at k = {elbow}, stability-optimal cut at k = {best}")
 
     log = out / "responses.jsonl"
-    if engine is None:
-        from qscorer.gemini import Gemini
-        gem = Gemini(params.model, concurrency=params.concurrency, delay=params.delay, timeout=params.timeout)
-        many = lambda jobs, accept: asyncio.run(gem.many(jobs, log, params.passes, accept, progress))
-    else:
-        many = lambda jobs, accept: engine.many(jobs, log, params.passes, accept, progress)
+    many = lambda jobs, accept: engine.many(jobs, log, params.passes, accept, progress)
 
     pjobs = polarity_jobs(features, params, config)
     n_by_id = {j.id: min(params.polarity_batch, len(features) - int(j.id.split("|")[1])) for j in pjobs}
@@ -274,7 +263,8 @@ def run_canon(config: DatasetConfig, params: CanonParams, features: pd.DataFrame
         clusters[k] = pd.DataFrame(rows)
         sign = features.polarity.map({"presence": "+", "absence": "-"}).fillna("")
         mappings[k] = features[KEY].assign(canonical=np.where(sign.ne(""), "k" + str(k) + "-" + pd.Series(labels).astype(str).str.zfill(3) + sign, ""))
-    summary = {"dataset": config.name, "params": params.model_dump(mode="json"), "raw_features": int(len(features)), "dimensions": int(X.shape[1]),
+    summary = {"dataset": config.name, "params": params.model_dump(mode="json"), "backend": engine.describe(),
+               "raw_features": int(len(features)), "dimensions": int(X.shape[1]),
                "cuts": cuts, "polarity": features.polarity.value_counts().to_dict(),
                "clusters": {str(k): {"n": int(len(t)), "coherent": int(t.coherent.fillna(False).sum()), "named": int(t.name.ne("").sum()),
                                      "largest": int(t["size"].max()), "singletons": int((t["size"] == 1).sum())} for k, t in clusters.items()},

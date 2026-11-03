@@ -1,7 +1,7 @@
-"""Stage 1 on one dataset: Gemini's direct learning predictions, one question per call.
+"""Stage 1 on one dataset: the model's direct learning predictions, one question per call.
 
 Run:  uv run python scripts/run_baseline.py --dataset spacing-exp4 [--limit 8] [--samples 5] [--prompts improve known]
-          [--model gemini-3.8-flash] [--temperature 1.0] [--thinking medium] [--no-thoughts] [--concurrency 8] [--passes 3]
+          [--backend gemini|openrouter] [--base-url URL] [--model gemini-3.8-flash] [--temperature 1.0] [--thinking medium] [--no-thoughts] [--concurrency 8] [--passes 3]
           [--seed 0] [--out results] [--tag NAME] [--dry-run]
 Out:  results/<dataset>/baseline[-tag]/responses.jsonl (raw, resumable), samples.csv, ratings.csv, evaluation.json,
       summary.json, prompt-example.txt
@@ -25,7 +25,9 @@ def main():
     ap.add_argument("--limit", type=int, default=None, help="ask only this many questions, spread over the item sets (pilots)")
     ap.add_argument("--samples", type=int, default=d.samples)
     ap.add_argument("--prompts", nargs="+", choices=["improve", "known"], default=d.prompts)
-    ap.add_argument("--model", default=d.model)
+    ap.add_argument("--backend", choices=["gemini", "openrouter"], default=d.backend, help="gemini (GEMINI_API_KEY) or openrouter (OPENROUTER_API_KEY)")
+    ap.add_argument("--base-url", default=d.base_url, help="openrouter only: another server of the OpenAI format")
+    ap.add_argument("--model", default=d.model, help="model id on the backend")
     ap.add_argument("--temperature", type=float, default=d.temperature)
     ap.add_argument("--thinking", choices=["minimal", "low", "medium", "high"], default=d.thinking)
     ap.add_argument("--no-thoughts", action="store_true", help="do not ask for thought summaries")
@@ -38,7 +40,7 @@ def main():
     args = ap.parse_args()
 
     config = load_dataset_config(args.dataset)
-    params = BaselineParams(model=args.model, prompts=args.prompts, samples=args.samples, temperature=args.temperature, thinking=args.thinking,
+    params = BaselineParams(backend=args.backend, base_url=args.base_url, model=args.model, prompts=args.prompts, samples=args.samples, temperature=args.temperature, thinking=args.thinking,
                             thoughts=not args.no_thoughts, concurrency=args.concurrency, passes=args.passes, limit=args.limit, seed=args.seed)
     root = Path(args.out) / config.name
     slopes = pd.read_csv(root / "slopes" / "slopes.csv") if (root / "slopes" / "slopes.csv").exists() else None
@@ -49,9 +51,9 @@ def main():
         questions = load_questions(config.questions)
         ids = select_questions(questions, config, params, slopes.set_index("id").set if slopes is not None else None)
         jobs = build_jobs(questions, ids, config, params)
-        print(f"{config.name}: {len(ids)} questions x {len(params.prompts)} prompts x {params.samples} samples = {len(jobs)} calls to {params.model}; "
+        print(f"{config.name}: {len(ids)} questions x {len(params.prompts)} prompts x {params.samples} samples = {len(jobs)} calls to {params.model} on {params.backend}; "
               f"would write {out}/")
-        print(f"\n--- first prompt ({jobs[0].id}) ---\n{jobs[0].contents}\n--- config ---\n{json.dumps({k: v for k, v in jobs[0].config.items() if k != 'system_instruction'})}")
+        print(f"\n--- first prompt ({jobs[0].id}) ---\n{jobs[0].prompt}\n--- settings ---\n{json.dumps(jobs[0].settings())}")
         return
 
     result = run_baseline(config, params, out, slopes, pairs_q)

@@ -37,7 +37,10 @@ class Engine:
         self.centres = rng.normal(size=(len(GROUPS), 16))
         self.texts = None
 
-    def embed(self, texts):
+    def describe(self):
+        return {"backend": "fake"}
+
+    def embed(self, texts, *args):
         self.texts = texts
         rng = np.random.default_rng(2)
         out = []
@@ -51,10 +54,10 @@ class Engine:
         for j in jobs:
             kind = j.id.split("|")[0]
             if kind == "polarity":
-                lines = [l for l in j.contents.split("\n") if l[:1].isdigit()]
+                lines = [l for l in j.prompt.split("\n") if l[:1].isdigit()]
                 answer = {"polarities": [{"index": int(l.split(".")[0]), "polarity": "absence" if "Absence" in l else "presence"} for l in lines]}
             else:
-                first = j.contents.split("\n- ")[1].split(":")[0]
+                first = j.prompt.split("\n- ")[1].split(":")[0]
                 answer = {"name": first.replace("Absence of ", ""), "definition": "The feedback or question has this property.", "coherent": True, "note": ""}
             r = raw(j.id, text=json.dumps(answer))
             with open(log, "a") as f:
