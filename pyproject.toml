@@ -1,0 +1,16 @@
+[project]
+name = "llm-question-scorer"
+version = "0.1.0"
+description = "LLM-based question scorer"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.1",
+    "pandas>=2.2",
+    "scipy>=1.14",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
