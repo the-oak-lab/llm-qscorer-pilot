@@ -1,0 +1,69 @@
+"""What a dataset is, and how a Stage 0.1 run is parameterised.
+
+A dataset config (`configs/datasets/<name>.toml`) describes files in DataShop's formats: a
+transaction file (or a student-step file) and a question JSONL. Run parameters have defaults
+here and are overridden on the command line.
+"""
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class PhaseFilter(BaseModel):
+    """Which rows enter the fit. Rows whose `column` matches `practice` (a regular expression)
+    are practice opportunities, numbered per student and question in time order. Rows matching
+    `baseline` (optional, e.g. a pretest) give each question a before-practice level; the change
+    from that level to the first practice attempt is the question's jump. Rows matching neither
+    (e.g. posttests) are left out."""
+    column: str = "Level (Phase)"
+    practice: str
+    baseline: str | None = None
+
+
+class TimedOutMarker(BaseModel):
+    """How the log marks an attempt that timed out with no answer: `column` equals `value`
+    and `input_column` is blank."""
+    column: str = "CF (Timed Out)"
+    value: str = "TRUE"
+    input_column: str = "Input"
+
+
+class DatasetConfig(BaseModel):
+    name: str
+    transactions: Path
+    questions: Path
+    phases: PhaseFilter
+    timed_out: TimedOutMarker | None = None
+    student_column: str = "Anon Student Id"
+    step_column: str = "Step Name"
+    set_column: str | None = Field(None, description="a transaction column (e.g. Class) whose set of values per question defines its item set")
+
+    def resolved(self, root: Path) -> "DatasetConfig":
+        """The same config with relative paths made absolute against `root`."""
+        return self.model_copy(update={
+            "transactions": root / self.transactions, "questions": root / self.questions})
+
+
+class SlopeParams(BaseModel):
+    """Parameters of Stage 0.1. A slope is in logits per log-attempt: the gain from practice
+    attempt 1 to attempt k is slope * log k."""
+    max_opportunities: int | None = Field(7, ge=1, description="keep each student's first k practice opportunities on a question (the baseline row is always kept); null keeps all")
+    min_support: int = Field(10, ge=0, description="students with a second practice opportunity, below which a question gets no posterior")
+    timeouts: Literal["keep", "drop"] = Field("keep", description="keep a no-answer timeout as an incorrect first attempt, or drop it")
+    reliability_splits: int = Field(5, ge=0, description="split-half repetitions; 0 skips the reliability check")
+    seed: int = 0
+
+
+def load_dataset_config(name_or_path: str | Path, root: Path = ROOT) -> DatasetConfig:
+    """Load `configs/datasets/<name>.toml`, or a config file given by path, with paths resolved."""
+    path = Path(name_or_path)
+    if not path.suffix:
+        path = root / "configs" / "datasets" / f"{name_or_path}.toml"
+    with open(path, "rb") as f:
+        return DatasetConfig(**tomllib.load(f)).resolved(root)

@@ -1,0 +1,16 @@
+# Spacing experiment 4: high-school science, 344 questions in four item sets, 348 students.
+name = "spacing-exp4"
+transactions = "datasets/spacing-exp4/interim/ds-transactions.txt"
+questions = "datasets/spacing-exp4/processed/spacing-exp4-mcq.jsonl"
+
+set_column = "Class"       # each class saw one bank of questions; the banks are the item sets, with no student overlap
+
+[phases]
+column = "Level (Phase)"
+practice = '^learning\d*$'    # eight weekly sessions learning1 to learning8
+baseline = '^pretest\d*$'     # two pretest blocks: the before-practice level; posttests match neither and are left out
+
+[timed_out]
+column = "CF (Timed Out)"
+value = "TRUE"
+input_column = "Input"        # a timeout with a blank input is a no-answer timeout
