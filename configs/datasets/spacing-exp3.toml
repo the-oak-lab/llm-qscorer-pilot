@@ -4,6 +4,7 @@ transactions = "datasets/spacing-exp3/interim/ds-transactions.txt"
 questions = "datasets/spacing-exp3/processed/spacing-exp3-mcq.jsonl"
 
 set_column = "Class"       # each class saw one bank of questions; the banks are the item sets, with no student overlap
+schedule_column = "Condition Name"   # the spacing schedule of each (student, question): massed, equal_spacing, optimal_algo, sm2, filler
 
 [phases]
 column = "Level (Phase)"

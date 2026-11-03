@@ -26,3 +26,21 @@ def test_run_slopes(dataset):
     no_base = run_slopes(config.model_copy(update={"phases": PhaseFilter(practice=r"^learning\d+$")}), SlopeParams(max_opportunities=5, reliability_splits=0)).table.set_index("id")
     assert no_base.jump.isna().all() and no_base.baseline_logit.isna().all() and (no_base.n_baseline == 0).all()
     assert abs(no_base.loc["q1", "slope"] - t.loc["q1", "slope"]) < 0.15  # the slope is estimated from the same practice rows
+
+
+def test_schedule_adjusted_run(dataset):
+    config, _ = dataset
+    plain = run_slopes(config, SlopeParams(max_opportunities=5, reliability_splits=0)).table.set_index("id")
+    result = run_slopes(config, SlopeParams(max_opportunities=5, reliability_splits=1, adjust_schedule=True))
+    t = result.table.set_index("id")
+    assert t.supported.tolist() == plain.supported.tolist() and (t.slope - plain.slope).abs().max() < 0.3
+    assert t.loc["q1", "p_positive"] > 0.99 and t.loc["q3", "p_positive"] < 0.01
+    sched = result.summary["schedule"]
+    assert set(sched["rows"]) == {"massed", "spaced"} and len(sched["terms"]) == 3 and result.summary["params"]["adjust_schedule"]
+    assert np.isfinite(result.summary["reliability"]["median"]["slope_spearman_brown"])
+    try:
+        run_slopes(config.model_copy(update={"schedule_column": None}), SlopeParams(max_opportunities=5, reliability_splits=0, adjust_schedule=True))
+    except ValueError as e:
+        assert "schedule_column" in str(e)
+    else:
+        raise AssertionError("adjust_schedule without a schedule column must be refused")

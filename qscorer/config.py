@@ -43,6 +43,7 @@ class DatasetConfig(BaseModel):
     student_column: str = "Anon Student Id"
     step_column: str = "Step Name"
     set_column: str | None = Field(None, description="a transaction column (e.g. Class) whose set of values per question defines its item set")
+    schedule_column: str | None = Field(None, description="a transaction column (e.g. Condition Name) giving the practice schedule of each (student, question) pair; needed for the schedule-adjusted fit")
 
     def resolved(self, root: Path) -> "DatasetConfig":
         """The same config with relative paths made absolute against `root`."""
@@ -56,6 +57,7 @@ class SlopeParams(BaseModel):
     max_opportunities: int | None = Field(7, ge=1, description="keep each student's first k practice opportunities on a question (the baseline row is always kept); null keeps all")
     min_support: int = Field(10, ge=0, description="students with a second practice opportunity, below which a question gets no posterior")
     timeouts: Literal["keep", "drop"] = Field("keep", description="keep a no-answer timeout as an incorrect first attempt, or drop it")
+    adjust_schedule: bool = Field(False, description="give each practice schedule its own first-practice level and mean slope (the sensitivity fit); the question's slope is then its deviation plus the row-weighted mean of the schedule slopes")
     reliability_splits: int = Field(5, ge=0, description="split-half repetitions; 0 skips the reliability check")
     seed: int = 0
 

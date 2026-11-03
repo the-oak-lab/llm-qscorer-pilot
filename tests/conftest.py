@@ -52,6 +52,7 @@ def dataset(tmp_path_factory):
             add(sid, "learning2", "q2", "2026-01-03 10:02:00", "2026-01-03 10:02:09", "CORRECT")
             add(sid, "learning3", "q3", "2026-01-04 10:07:00", "2026-01-04 10:07:45", "INCORRECT", inp="", timed_out="TRUE")
     tx = pd.DataFrame(rows)
+    tx["Condition Name"] = np.where(tx["Anon Student Id"].str[-1].astype(int) % 2 == 0, "spaced", "massed")  # a schedule per student, no planted effect
     start = pd.to_datetime(tx["Problem Start Time"])
     tx["Problem View"] = start.groupby([tx["Anon Student Id"], tx["Problem Name"]]).rank(method="dense").astype(int).astype(str)
     root = tmp_path_factory.mktemp("data")
@@ -60,5 +61,6 @@ def dataset(tmp_path_factory):
         for q in BANK:
             f.write(json.dumps({"id": q, "question": {"stem": f"stem {q}", "choices": []}, "answerKey": "a", "feedback-text": ""}) + "\n")
     config = DatasetConfig(name="synthetic", transactions=root / "tx.txt", questions=root / "q.jsonl",
-                           phases=PhaseFilter(practice=r"^learning\d+$", baseline=r"^pretest\d*$"), timed_out=TimedOutMarker())
+                           phases=PhaseFilter(practice=r"^learning\d+$", baseline=r"^pretest\d*$"), timed_out=TimedOutMarker(),
+                           schedule_column="Condition Name")
     return config, tx

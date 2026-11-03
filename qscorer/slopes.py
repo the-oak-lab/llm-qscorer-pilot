@@ -6,7 +6,9 @@ first-practice levels, the jump, the slope posterior (mean, sd, P(slope > 0), th
 in accuracy over the practice window) and the observed accuracies that Stage 0.2 matches on. A
 question gets no posterior when it is separated or fewer than `min_support` students have a
 second practice opportunity. Split-half reliability (random halves of the students, refitted)
-says how much of the between-question spread in slopes is signal.
+says how much of the between-question spread in slopes is signal. With `adjust_schedule` the
+fit gives each practice schedule its own first-practice level and mean slope (see `afm.py`);
+this is the design's sensitivity analysis, run with `--adjust-schedule`.
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ from scipy.stats import norm, pearsonr, spearmanr
 
 from qscorer.afm import SlopeFit, fit_slopes
 from qscorer.config import DatasetConfig, SlopeParams
-from qscorer.data import BASELINE, KC_MODEL, is_baseline, item_sets, load_questions, observed_accuracy, practice_steps, read_datashop, to_step_data
+from qscorer.data import BASELINE, KC_MODEL, SCHEDULE, is_baseline, item_sets, load_questions, observed_accuracy, practice_steps, read_datashop, to_step_data
 
 COUNTS = ["n_students", "n_observations", "n_second_opportunity", "n_baseline", "n_pretest", "n_first_practice"]
 
@@ -42,7 +44,9 @@ def question_table(steps: pd.DataFrame, config: DatasetConfig, params: SlopePara
     """Fit the model to `steps` and return one row per question with data, the fit, and the
     students' abilities."""
     data = to_step_data(steps)
-    sf = fit_slopes(data)
+    if params.adjust_schedule and SCHEDULE not in steps.columns:
+        raise ValueError("adjust_schedule needs a schedule_column in the dataset config")
+    sf = fit_slopes(data, schedule=steps[SCHEDULE].tolist() if params.adjust_schedule else None)
     practice, baseline = steps[steps["Role"].eq("practice")], steps[steps["Role"].eq("baseline")]
     opp = practice[f"Opportunity ({KC_MODEL})"].astype(int)
     g = practice.groupby(config.step_column)
@@ -127,6 +131,7 @@ def run_slopes(config: DatasetConfig, params: SlopeParams) -> SlopeResult:
         "prior": {"mu": sf.mu, "tau": float(np.sqrt(sf.tau2)), "em_iterations": len(sf.iterations),
                   "tau2_path": [round(i["tau2"], 6) for i in sf.iterations] + [round(sf.tau2, 6)],
                   "laplace_log_marginal": sf.laplace_log_marginal},
+        "schedule": {"terms": sf.schedule_terms, "rows": log.get("schedules")} if params.adjust_schedule else None,
         "questions": {"in_file": len(ids), "with_data": int(table.n_students.gt(0).sum()), "supported": int(table.supported.sum()),
                       "sets": table.set.value_counts().sort_index().to_dict()},
         "slopes": {"median": float(s.slope.median()), "q10": float(s.slope.quantile(.1)), "q90": float(s.slope.quantile(.9)),

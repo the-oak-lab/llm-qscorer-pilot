@@ -8,8 +8,11 @@ opportunities counted in time order; its baseline rows (first presentation per s
 form a second component, `<question>|baseline`, seen at one opportunity, so it has an intercept
 and no slope. The difference between the two intercepts is the question's jump.
 
-Also here: a question's item set (the questions seen by the same set of classes) and its
-observed accuracies, which Stage 0.2 matches on.
+Also here: the practice schedule of each (student, question) pair, attached from the
+transactions when the config names a `schedule_column` (the rollup drops it; the schedule is
+constant within a pair, and the most frequent value wins where it is not), a question's item
+set (the questions seen by the same set of classes) and its observed accuracies, which Stage
+0.2 matches on.
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ from qscorer.config import DatasetConfig, SlopeParams
 
 KC_MODEL = "Question"
 BASELINE = "|baseline"  # suffix of a question's baseline component
+SCHEDULE = "Schedule"   # the column of `practice_steps` holding each row's practice schedule
 
 
 def is_baseline(kc: str) -> bool:
@@ -69,6 +73,13 @@ def practice_steps(tx: pd.DataFrame, config: DatasetConfig, params: SlopeParams,
     log["opportunities"] = int(len(steps))
 
     steps = steps.copy()
+    if config.schedule_column is not None:
+        pair = [config.student_column, config.step_column]
+        counts = tx.groupby(pair + [config.schedule_column]).size().reset_index(name="n")
+        counts = counts.sort_values(["n", config.schedule_column], ascending=[False, True], kind="stable").drop_duplicates(pair)
+        key = counts.set_index(pair)[config.schedule_column]
+        steps[SCHEDULE] = np.asarray(pd.MultiIndex.from_frame(steps[pair]).map(key))
+        log["schedules"] = steps[SCHEDULE].value_counts().to_dict()
     steps["Role"] = np.where(steps[config.phases.column].str.match(config.phases.practice), "practice", "baseline")
     view = pd.to_numeric(steps.get("Problem View", pd.Series("", index=steps.index)), errors="coerce")
     order = pd.DataFrame({"student": steps[config.student_column], "time": steps["First Transaction Time"],

@@ -1,8 +1,9 @@
 """Stage 0.1 on one dataset: estimate every question's practice slope.
 
 Run:  uv run python scripts/run_slopes.py --dataset spacing-exp4 [--max-opportunities 7] [--min-support 10]
-          [--timeouts keep|drop] [--reliability-splits 5] [--seed 0] [--out results] [--tag NAME]
+          [--timeouts keep|drop] [--adjust-schedule] [--reliability-splits 5] [--seed 0] [--out results] [--tag NAME]
 Out:  results/<dataset>/slopes/slopes.csv, students.csv, summary.json, run.log
+      (results/<dataset>/slopes-schedule/ with --adjust-schedule, the sensitivity fit)
 """
 import argparse
 import json
@@ -19,6 +20,7 @@ def main():
     ap.add_argument("--max-opportunities", default=defaults.max_opportunities, help="an integer, or 'none' for no cap")
     ap.add_argument("--min-support", type=int, default=defaults.min_support)
     ap.add_argument("--timeouts", choices=["keep", "drop"], default=defaults.timeouts)
+    ap.add_argument("--adjust-schedule", action="store_true", help="give each practice schedule its own first-practice level and mean slope (needs schedule_column in the config)")
     ap.add_argument("--reliability-splits", type=int, default=defaults.reliability_splits)
     ap.add_argument("--seed", type=int, default=defaults.seed)
     ap.add_argument("--out", default="results", help="results root; files go to <out>/<dataset>/slopes/")
@@ -27,11 +29,12 @@ def main():
 
     cap = None if str(args.max_opportunities).lower() == "none" else int(args.max_opportunities)
     params = SlopeParams(max_opportunities=cap, min_support=args.min_support, timeouts=args.timeouts,
-                         reliability_splits=args.reliability_splits, seed=args.seed)
+                         adjust_schedule=args.adjust_schedule, reliability_splits=args.reliability_splits, seed=args.seed)
     config = load_dataset_config(args.dataset)
     result = run_slopes(config, params)
 
-    out = Path(args.out) / config.name / ("slopes" + (f"-{args.tag}" if args.tag else ""))
+    tag = args.tag or ("schedule" if args.adjust_schedule else "")
+    out = Path(args.out) / config.name / ("slopes" + (f"-{tag}" if tag else ""))
     out.mkdir(parents=True, exist_ok=True)
     result.table.to_csv(out / "slopes.csv", index=False)
     result.students.to_csv(out / "students.csv", index=False)
@@ -47,6 +50,9 @@ def main():
     print(f"  prior: mu {p['mu']:.3f}, tau {p['tau']:.3f} after {p['em_iterations']} EM iterations; REML Laplace log marginal {p['laplace_log_marginal']:.1f}")
     print(f"  slopes: median {sl.get('median', float('nan')):.3f} (sd {sl.get('median_sd', float('nan')):.3f}), {sl.get('share_positive', float('nan')):.0%} positive, "
           f"P(slope > 0) >= 0.95 for {sl.get('share_p_positive_at_least_0.95', float('nan')):.0%}, <= 0.70 for {sl.get('share_p_positive_at_most_0.70', float('nan')):.0%}")
+    if s["schedule"]:
+        terms = s["schedule"]["terms"]
+        print("  schedule terms: " + ", ".join(f"{k} {v:+.3f}" for k, v in sorted(terms.items())))
     if s["jump"]:
         j = s["jump"]
         print(f"  jump (baseline to first practice attempt): {j['questions']} questions, median {j['median']:.3f} logits (sd {j['median_sd']:.3f}), {j['share_positive']:.0%} positive")

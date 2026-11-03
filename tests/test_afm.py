@@ -4,12 +4,17 @@ from conftest import BANK, JUMP, TRUE
 
 from qscorer.afm import build_design, fit_slopes, with_tau2
 from qscorer.config import SlopeParams
-from qscorer.data import practice_steps, read_datashop, to_step_data
+from qscorer.data import SCHEDULE, practice_steps, read_datashop, to_step_data
 
 
 def planted(config):
     steps, _ = practice_steps(read_datashop(config.transactions), config, SlopeParams(max_opportunities=5), set(BANK))
     return to_step_data(steps)
+
+
+def planted_with_schedule(config):
+    steps, _ = practice_steps(read_datashop(config.transactions), config, SlopeParams(max_opportunities=5), set(BANK))
+    return to_step_data(steps), steps[SCHEDULE].tolist()
 
 
 def test_design_has_a_shared_mean_and_penalised_deviations(dataset):
@@ -41,3 +46,25 @@ def test_em_converges_and_recovers_the_planted_effects(dataset):
     d = sf.difference_sd(["q1"], ["q3"])[0]
     assert abs(d - np.hypot(s.loc["q1", "slope_sd"], s.loc["q3", "slope_sd"])) < 0.2 * d  # the two slopes are nearly independent
     assert np.isfinite(sf.laplace_log_marginal) and abs(sf.student_effects(data).mean()) < 1e-9
+
+
+def test_schedule_adjusted_fit(dataset):
+    config, _ = dataset
+    data, schedule = planted_with_schedule(config)
+    design = build_design(data, tau2=0.25, schedule=schedule)
+    assert [b.name for b in design.blocks] == ["student", "kc_intercept", "kc_slope", "schedule_jump", "schedule_slope"]
+    assert len(design.get("schedule_jump").columns) == 1 and sorted(design.get("schedule_slope").columns) == ["massed", "spaced"]
+    assert "slope_mean:mu" not in design.columns
+    adj, plain = fit_slopes(data, schedule=schedule, tau2=0.05), fit_slopes(data, tau2=0.05)
+    assert adj.fit.is_optimal and set(adj.schedule_terms) == {"jump:massed", "slope:massed", "slope:spaced"} or set(adj.schedule_terms) == {"jump:spaced", "slope:massed", "slope:spaced"}
+    assert abs(adj.schedule_terms["slope:massed"] - adj.schedule_terms["slope:spaced"]) < 1.0   # no planted schedule effect
+    assert abs(sum(adj.mean_columns.values()) - 1.0) < 1e-9 and abs(adj.mu - plain.mu) < 0.3
+    a, b = adj.slopes(), plain.slopes()
+    assert list(a.index) == list(b.index) and (a.slope - b.slope).abs().max() < 0.3 and (a.slope_sd > 0).all()
+    assert abs(adj.difference_sd(["q1"], ["q3"])[0] - plain.difference_sd(["q1"], ["q3"])[0]) < 0.05
+    try:
+        build_design(data, 0.25, schedule=schedule[:-1])
+    except ValueError as e:
+        assert "labels" in str(e)
+    else:
+        raise AssertionError("a schedule of the wrong length must be refused")

@@ -3,7 +3,7 @@ import numpy as np
 from conftest import BANK, N_STUDENTS
 
 from qscorer.config import SlopeParams
-from qscorer.data import item_sets, observed_accuracy, practice_steps, read_datashop
+from qscorer.data import SCHEDULE, item_sets, observed_accuracy, practice_steps, read_datashop
 
 
 def test_practice_steps_follow_datashop_rule(dataset):
@@ -24,6 +24,8 @@ def test_practice_steps_follow_datashop_rule(dataset):
     assert np.atleast_1d(opp[("q1", "learning2")]).tolist() == [3] and np.atleast_1d(opp[("q1", "learning5")]).tolist() == [6]
     assert np.atleast_1d(opp[("q2", "learning1")]).tolist() == [1]          # counting starts in the practice phase, not at the pretest
     assert s0[s0["Step Name"] == "q4"]["Opportunity (Question)"].tolist() == ["1"]
+    assert (steps.loc[steps["Anon Student Id"] == "s000", SCHEDULE] == "spaced").all() and log["schedules"]["massed"] > 0  # the schedule survives the rollup
+    assert SCHEDULE not in practice_steps(read_datashop(config.transactions), config.model_copy(update={"schedule_column": None}), SlopeParams(), set(BANK))[0].columns
 
 
 def test_cap_and_timeouts(dataset):

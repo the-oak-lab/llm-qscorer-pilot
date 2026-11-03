@@ -16,11 +16,23 @@ approximation, tau^2 <- mean over questions of (b_q^2 + posterior variance of b_
 convergence. Every question's slope posterior is normal with mean mu + b_q and the variance of
 that sum from the inverse penalised information; the same inverse gives the posterior sd of any
 difference of slopes, which Stage 0.2's separation test needs.
+
+The schedule-adjusted variant (`schedule` given: one label per row, the practice schedule of
+the row's student on its question) adds kappa_c * [practice] and replaces mu with mu_c:
+
+    logit P(correct) = student_i + intercept_q + jump_q * [practice] + kappa_c * [practice] + (mu_c + b_q) * log(1 + T)
+
+so b_q is the question's slope relative to the average curve of the schedules it was practiced
+under. One kappa is dropped (the most frequent schedule is the reference), since the five
+together equal the practice indicator, which the intercepts already span. The reported slope is
+then sum_c w_c mu_c + b_q, with w_c the share of slope-carrying rows under schedule c, which
+keeps it on the scale of the unadjusted fit.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -33,6 +45,8 @@ from scipy.sparse.linalg import splu
 
 from qscorer.data import BASELINE, is_baseline
 
+SCHEDULE_JUMP, SCHEDULE_SLOPE = "schedule_jump", "schedule_slope"
+
 
 def practice_curve(data: StepData) -> list[tuple[float, ...]]:
     """log(1 + T) on practice rows; 0 on baseline rows, whose component has no slope."""
@@ -40,19 +54,41 @@ def practice_curve(data: StepData) -> list[tuple[float, ...]]:
             for kcs, opps in zip(data.kcs, data.opportunities)]
 
 
-def build_design(data: StepData, tau2: float) -> Design:
+def build_design(data: StepData, tau2: float, schedule: Sequence[str] | None = None) -> Design:
     """The AFM blocks (student, KC intercept, KC slope on the curve) with the slope block
-    penalised at 1/tau^2, identified, then the shared mean column appended (it is spanned by the
-    deviation columns, so it must not go through `identify`; the ridge keeps the penalised
-    problem strictly convex)."""
+    penalised at 1/tau^2, identified, then the mean-slope column(s) appended: `slope_mean:mu`,
+    or with a schedule one `schedule_slope` column per schedule. Those columns are spanned by the
+    deviation columns, so they must not go through `identify`; the ridge keeps the penalised
+    problem strictly convex. With a schedule the jump block (one indicator per non-reference
+    schedule on practice rows) goes through `identify` with the rest."""
     values = practice_curve(data)
-    base = Design((
+    blocks = [
         Block.from_levels("student", [(s,) for s in data.students]),
         Block.from_levels("kc_intercept", data.kcs),
         Block.from_levels("kc_slope", data.kcs, values=values, l2=1.0 / tau2),
-    )).identify()
-    mean = Block.build("slope_mean", sparse.csr_matrix(np.array([[sum(v)] for v in values])), ["mu"])
-    return base.with_blocks(mean)
+    ]
+    if schedule is None:
+        mean = Block.build("slope_mean", sparse.csr_matrix(np.array([[sum(v)] for v in values])), ["mu"])
+        return Design(tuple(blocks)).identify().with_blocks(mean)
+    schedule = list(schedule)
+    if len(schedule) != len(values):
+        raise ValueError(f"schedule has {len(schedule)} labels for {len(values)} rows")
+    practice = [not all(is_baseline(k) for k in kcs) for kcs in data.kcs]
+    reference = pd.Series([s for s, p in zip(schedule, practice) if p]).mode().iloc[0]
+    blocks.append(Block.from_levels(SCHEDULE_JUMP, [(s,) if p and s != reference else () for s, p in zip(schedule, practice)]))
+    slope = Block.from_levels(SCHEDULE_SLOPE, [(s,) if sum(v) > 0 else () for s, v in zip(schedule, values)],
+                              values=[(sum(v),) if sum(v) > 0 else () for v in values])
+    return Design(tuple(blocks)).identify().with_blocks(slope)
+
+
+def mean_slope_columns(design: Design, schedule: Sequence[str] | None, values: list[tuple[float, ...]]) -> dict[int, float]:
+    """The columns whose weighted sum is the mean slope: `mu` alone, or each schedule's slope
+    weighted by its share of the rows that carry slope information (T >= 1)."""
+    cols = design.columns
+    if schedule is None:
+        return {cols.index("slope_mean:mu"): 1.0}
+    share = pd.Series([s for s, v in zip(schedule, values) if sum(v) > 0]).value_counts(normalize=True)
+    return {cols.index(f"{SCHEDULE_SLOPE}:{s}"): float(w) for s, w in share.items()}
 
 
 def with_tau2(design: Design, tau2: float) -> Design:
@@ -83,7 +119,7 @@ def standard_errors(info: sparse.csc_matrix, targets: list[dict[int, float]]) ->
             rhs = np.zeros((info.shape[0], len(chunk)))
             for k, target in enumerate(chunk):
                 for i, weight in target.items():
-                    rhs[i, k] = weight
+                    rhs[i, k] += weight
             sol = lu.solve(rhs)
             variances[start:start + len(chunk)] = [(rhs[:, k] * sol[:, k]).sum() for k in range(len(chunk))]
     except RuntimeError:
@@ -96,10 +132,15 @@ def standard_errors(info: sparse.csc_matrix, targets: list[dict[int, float]]) ->
 class SlopeFit:
     fit: AFMFit
     design: Design
-    mu: float
+    mean_columns: dict[int, float]      # columns and weights whose sum is the mean slope mu
     tau2: float
-    iterations: list[dict]  # tau2 per EM iteration
+    iterations: list[dict]              # tau2 per EM iteration
     laplace_log_marginal: float
+    schedule_terms: dict[str, float] | None = None  # `jump:<schedule>` and `slope:<schedule>` when adjusted
+
+    @property
+    def mu(self) -> float:
+        return float(sum(w * self.fit.weights[i] for i, w in self.mean_columns.items()))
 
     @cached_property
     def slope_columns(self) -> dict[str, int]:
@@ -113,16 +154,16 @@ class SlopeFit:
     def slopes(self) -> pd.DataFrame:
         """Per question: the posterior mean `slope` (mu + b_q), its sd, and whether the question
         is separated (an intercept or slope with no finite estimate)."""
-        mu_col = self.design.columns.index("slope_mean:mu")
         cols = list(self.slope_columns.values())
         separated = set(self.fit.separated.in_blocks("kc_slope", "kc_intercept"))
         return pd.DataFrame({"slope": self.mu + self.fit.weights[cols],
-                             "slope_sd": standard_errors(self.info, [{mu_col: 1.0, i: 1.0} for i in cols]),
+                             "slope_sd": standard_errors(self.info, [{**self.mean_columns, i: 1.0} for i in cols]),
                              "separated": [q in separated for q in self.slope_columns]},
                             index=pd.Index(list(self.slope_columns), name="id"))
 
     def jumps(self) -> pd.DataFrame:
-        """Per question with both components: practice intercept minus baseline intercept, with its sd."""
+        """Per question with both components: practice intercept minus baseline intercept, with
+        its sd (under the adjusted fit, at the reference schedule)."""
         col = {c: i for i, c in enumerate(self.design.columns)}
         pairs = [(c.split(":", 1)[1], i, col[c + BASELINE]) for c, i in col.items()
                  if c.startswith("kc_intercept:") and not is_baseline(c) and c + BASELINE in col]
@@ -147,30 +188,35 @@ class SlopeFit:
         return theta
 
 
-def fit_slopes(data: StepData, tau2: float = 0.05, max_iter: int = 50, tol: float = 1e-3) -> SlopeFit:
-    """Fit the model. `tau2` is the starting value of the EM loop; `tol` its relative tolerance."""
-    design = build_design(data, tau2)
+def fit_slopes(data: StepData, schedule: Sequence[str] | None = None, tau2: float = 0.05,
+               max_iter: int = 50, tol: float = 1e-3) -> SlopeFit:
+    """Fit the model, schedule-adjusted when `schedule` (one label per row) is given. `tau2` is
+    the starting value of the EM loop; `tol` its relative tolerance."""
+    design = build_design(data, tau2, schedule)
     cols = design.columns
     idx = [i for i, c in enumerate(cols) if c.startswith("kc_slope:")]
-    mu_idx = cols.index("slope_mean:mu")
+    mean_columns = mean_slope_columns(design, schedule, practice_curve(data))
+    label = "slopes-schedule" if schedule is not None else "slopes"
     w0, iterations = None, []
     for it in range(max_iter):
         design = with_tau2(design, tau2)
-        fit = fit_logistic(design, data.y, w0=w0, warn_separated=False, label="slopes", result_type=AFMFit)
+        fit = fit_logistic(design, data.y, w0=w0, warn_separated=False, label=label, result_type=AFMFit)
         w0 = fit.weights
         b = fit.weights[idx]
         v = standard_errors(information(design, fit), [{i: 1.0} for i in idx]) ** 2
         tau2_new = float(np.mean(b * b + v))
-        iterations.append({"iteration": it, "tau2": tau2, "tau2_next": tau2_new, "mu": float(fit.weights[mu_idx]),
+        iterations.append({"iteration": it, "tau2": tau2, "tau2_next": tau2_new,
+                           "mu": float(sum(w * fit.weights[i] for i, w in mean_columns.items())),
                            "log_likelihood": fit.ll_unpenalized, "optimal": fit.is_optimal})
         converged = abs(tau2_new - tau2) <= tol * tau2
         tau2 = tau2_new
         if converged:
             break
     design = with_tau2(design, tau2)
-    fit = fit_logistic(design, data.y, w0=w0, warn_separated=False, label="slopes", result_type=AFMFit)
-    return SlopeFit(fit, design, float(fit.weights[mu_idx]), tau2, iterations,
-                    laplace_log_marginal(fit, design, len(idx), tau2))
+    fit = fit_logistic(design, data.y, w0=w0, warn_separated=False, label=label, result_type=AFMFit)
+    terms = ({c.replace("schedule_", ""): float(fit.weights[i]) for i, c in enumerate(cols) if c.startswith("schedule_")}
+             if schedule is not None else None)
+    return SlopeFit(fit, design, mean_columns, tau2, iterations, laplace_log_marginal(fit, design, len(idx), tau2), terms)
 
 
 def laplace_log_marginal(fit, design: Design, n_deviations: int, tau2: float) -> float:
