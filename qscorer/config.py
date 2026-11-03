@@ -62,6 +62,16 @@ class SlopeParams(BaseModel):
     seed: int = 0
 
 
+class PairParams(BaseModel):
+    """Parameters of Stage 0.2 (classification and matching) and 0.4 (its diagnostics)."""
+    quantile: float = Field(0.25, gt=0, lt=0.5, description="within each item set, questions whose posterior mean slope is at or above the (1 - quantile) quantile are high-learning candidates, at or below the quantile low-learning")
+    caliper: float = Field(0.10, gt=0, description="largest difference in observed first-practice accuracy (share correct, 0 to 1) within a matched pair")
+    separation: float = Field(0.90, gt=0, lt=1, description="posterior probability that the high question's slope exceeds the low question's, required to keep a pair")
+    min_difference: float = Field(0.20, ge=0, description="smallest difference of posterior mean slopes (logits per log-attempt) required to keep a pair")
+    reliability_splits: int = Field(5, ge=0, description="split-half repetitions of the whole procedure (random halves of the students, refitted); 0 skips")
+    seed: int = 0
+
+
 def load_dataset_config(name_or_path: str | Path, root: Path = ROOT) -> DatasetConfig:
     """Load `configs/datasets/<name>.toml`, or a config file given by path, with paths resolved."""
     path = Path(name_or_path)
