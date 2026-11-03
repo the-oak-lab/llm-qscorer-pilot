@@ -128,6 +128,38 @@ class Gemini:
         return done
 
 
+async def embed_many(client: genai.Client, model: str, texts: list[str], batch: int = 100, concurrency: int = 8, prefix: str = "",
+                     progress: Callable[[str], None] = print) -> list[list[float]]:
+    """One embedding per text, in requests of `batch` texts, `concurrency` requests in flight.
+    Each text is wrapped as its own `Content`, which is what makes `gemini-embedding-2` return
+    one vector per text instead of one vector for the lot; `prefix` (e.g. the model's
+    "task: clustering | query: " instruction) goes in front of every text. A failed request is
+    retried up to three times."""
+    semaphore = asyncio.Semaphore(concurrency)
+    chunks = [texts[i:i + batch] for i in range(0, len(texts), batch)]
+
+    async def one(k: int, chunk: list[str]) -> tuple[int, list[list[float]]]:
+        contents = [types.Content(parts=[types.Part.from_text(text=prefix + t)]) for t in chunk]
+        async with semaphore:
+            for attempt in range(3):
+                try:
+                    r = await client.aio.models.embed_content(model=model, contents=contents)
+                    return k, [e.values for e in r.embeddings]
+                except Exception as e:
+                    if attempt == 2:
+                        raise
+                    await asyncio.sleep(2.0 ** attempt)
+            raise RuntimeError("unreachable")
+
+    out: dict[int, list[list[float]]] = {}
+    for coro in asyncio.as_completed([one(k, c) for k, c in enumerate(chunks)]):
+        k, vectors = await coro
+        out[k] = vectors
+        if len(out) % 10 == 0 or len(out) == len(chunks):
+            progress(f"embedded {sum(len(v) for v in out.values())} of {len(texts)}")
+    return [v for k in range(len(chunks)) for v in out[k]]
+
+
 def run(jobs: list[Job], log: Path, model: str, concurrency: int, delay: float, timeout: float, passes: int,
         accept: Callable[[dict], bool] | None = None, progress: Callable[[str], None] = print) -> dict[str, dict]:
     """`Gemini.many` from synchronous code."""

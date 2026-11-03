@@ -114,6 +114,28 @@ class DiscoveryParams(BaseModel):
     seed: int = 0
 
 
+class CanonParams(BaseModel):
+    """Parameters of Stage 2.3's normalisation: embedding, clustering, polarity and naming."""
+    embedding_model: str = Field("gemini-embedding-2", description="embedding model id")
+    prefix: str = Field("task: clustering | query: ", description="the model's task instruction, put in front of every text")
+    embed_batch: int = Field(100, ge=1, le=100, description="texts per embedding request (the API's maximum is 100)")
+    embed_concurrency: int = Field(8, ge=1)
+    k_max: int = Field(400, ge=2, description="largest number of clusters considered for the elbow")
+    k_grid: list[int] = Field([10, 15, 20, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400], description="cuts at which the two-call stability is measured")
+    stability_shuffles: int = Field(20, ge=1, description="shuffled pairings of calls for the stability baseline")
+    model: str = Field("gemini-3.8-flash", description="Gemini model for the polarity and naming calls")
+    thinking: Literal["minimal", "low", "medium", "high"] = "low"
+    polarity_batch: int = Field(25, ge=1, description="raw features classified per polarity call")
+    members_shown: int = Field(40, ge=5, description="cluster members shown to the naming call (a random sample when the cluster is larger)")
+    temperature: float = 1.0
+    max_output_tokens: int = 8192
+    concurrency: int = Field(64, ge=1)
+    delay: float = 0.02
+    timeout: float = 300.0
+    passes: int = 3
+    seed: int = 0
+
+
 def load_dataset_config(name_or_path: str | Path, root: Path = ROOT) -> DatasetConfig:
     """Load `configs/datasets/<name>.toml`, or a config file given by path, with paths resolved."""
     path = Path(name_or_path)
