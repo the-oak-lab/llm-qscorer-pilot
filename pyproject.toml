@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "LLM-based discovery of question features predictive of learning"
 requires-python = ">=3.12"
 dependencies = [
+    "google-genai>=2.34.0",
     "leapfit",
     "numpy>=2.1",
     "pandas>=2.2",

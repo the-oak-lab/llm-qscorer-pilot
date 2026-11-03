@@ -4,6 +4,7 @@ transactions = "datasets/spacing-exp4/interim/ds-transactions.txt"
 questions = "datasets/spacing-exp4/processed/spacing-exp4-mcq.jsonl"
 
 set_column = "Class"       # each class saw one bank of questions; the banks are the item sets, with no student overlap
+exclude = ["mcq-36522", "mcq-36555", "mcq-36574"]   # chemistry stems that reference an image missing from the export
 schedule_column = "Condition Name"   # the spacing schedule of each (student, question): massed, equal_spacing, optimal_algo, sm2, filler
 
 [phases]
@@ -15,3 +16,6 @@ baseline = '^pretest\d*$'     # two pretest blocks: the before-practice level; p
 column = "CF (Timed Out)"
 value = "TRUE"
 input_column = "Input"        # a timeout with a blank input is a no-answer timeout
+
+[prompt]
+context = "Students in science classes answered multiple-choice questions at a pretest and again during practice sessions spread over several weeks. After each answer, students saw feedback and then moved on to other questions."

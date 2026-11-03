@@ -15,3 +15,6 @@ baseline = '^pretest\d*$'     # two pretest blocks: the before-practice level; p
 column = "CF (Timed Out)"
 value = "TRUE"
 input_column = "Input"
+
+[prompt]
+context = "Students in science classes answered multiple-choice questions at a pretest and again during practice sessions spread over several weeks. After each answer, students saw feedback and then moved on to other questions."

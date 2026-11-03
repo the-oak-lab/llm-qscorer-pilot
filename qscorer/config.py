@@ -34,11 +34,20 @@ class TimedOutMarker(BaseModel):
     input_column: str = "Input"
 
 
+class PromptConfig(BaseModel):
+    """What Gemini is told about how the questions were used. No numbers from the data."""
+    system: str = "You are an expert in science education and the learning sciences."
+    context: str = ("Students answered multiple-choice questions at a pretest and again during practice sessions spread over "
+                    "several weeks. After each answer, students saw feedback and then moved on to other questions.")
+
+
 class DatasetConfig(BaseModel):
     name: str
     transactions: Path
     questions: Path
     phases: PhaseFilter
+    prompt: PromptConfig = PromptConfig()
+    exclude: list[str] = Field(default_factory=list, description="question ids kept out of the Gemini stages (e.g. stems that reference a missing image)")
     timed_out: TimedOutMarker | None = None
     student_column: str = "Anon Student Id"
     step_column: str = "Step Name"
@@ -69,6 +78,23 @@ class PairParams(BaseModel):
     separation: float = Field(0.90, gt=0, lt=1, description="posterior probability that the high question's slope exceeds the low question's, required to keep a pair")
     min_difference: float = Field(0.20, ge=0, description="smallest difference of posterior mean slopes (logits per log-attempt) required to keep a pair")
     reliability_splits: int = Field(5, ge=0, description="split-half repetitions of the whole procedure (random halves of the students, refitted); 0 skips")
+    seed: int = 0
+
+
+class BaselineParams(BaseModel):
+    """Parameters of Stage 1: Gemini's direct, no-checklist predictions, one question per call."""
+    model: str = Field("gemini-3.8-flash", description="Gemini model id")
+    prompts: list[Literal["improve", "known"]] = Field(["improve", "known"], description="the questions asked: the design's probability of improvement, and how many of 100 students already know the answer")
+    samples: int = Field(3, ge=1, description="independent calls per question and prompt (each with its own seed)")
+    temperature: float = Field(1.0, ge=0, description="sampling temperature; 1.0 is the model's default and the vendor's recommendation for Gemini 3 thinking models")
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="Gemini thinking level")
+    thoughts: bool = Field(True, description="ask for thought summaries and keep them per call")
+    max_output_tokens: int = Field(4096, ge=64)
+    concurrency: int = Field(8, ge=1, description="calls in flight at once")
+    delay: float = Field(0.05, ge=0, description="start-delay ramp between calls, in seconds")
+    timeout: float = Field(180.0, gt=0, description="seconds before a hanging call fails and is resent in the next pass")
+    passes: int = Field(3, ge=1, description="rounds of resending failed or unparsable calls")
+    limit: int | None = Field(None, ge=1, description="ask only this many questions, spread over the item sets (pilots)")
     seed: int = 0
 
 
