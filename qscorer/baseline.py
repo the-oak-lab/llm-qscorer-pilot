@@ -1,10 +1,9 @@
 """Stage 1 (`baseline`): Gemini's direct, no-checklist learning predictions.
 
 Each question is shown alone (stem, four options, correct answer, feedback, and the dataset's
-context sentence) and Gemini is asked, in separate calls, the design's question (the probability,
-0 to 100, that students improve on it over repeated practice with feedback) and the question that
-carried signal in the idea-22 project (how many of 100 students already know the answer before any
-practice). Each question is asked `samples` times per prompt with different seeds; the answer comes
+context sentence) and Gemini is asked, in separate calls, the design's question (how many of 100
+students will improve in accuracy on it with practice) and the question that carried signal in the
+idea-22 project (how many of 100 students already know the answer before practice). Each question is asked `samples` times per prompt with different seeds; the answer comes
 back as JSON (`reason`, `answer`), and the thought summary and token counts of every call are
 kept. A question's **rating** is the mean answer for `improve` and 100 minus the mean answer for
 `known`, so that a higher rating always means more predicted learning.
@@ -34,10 +33,10 @@ from qscorer.data import load_questions
 from qscorer.gemini import Job, parse
 
 TASKS = {
-    "improve": ("What is the probability (0 to 100 percent) that students will show improvement in accuracy on this "
-                "question over repeated practice with feedback? Give a short reason, then the probability as a whole number."),
-    "known": ("Out of 100 of these students, how many already know the correct answer to this question before any "
-              "practice? Give a short reason, then the number."),
+    "improve": ("Your task:\nGiven the features of the question and its feedback, estimate how many students (out of 100) will "
+                "show improvement in accuracy on this question with practice. Give a short reason, then your estimate as a whole number."),
+    "known": ("Your task:\nGiven the features of the question and its feedback, estimate how many students (out of 100) already "
+              "know the correct answer to this question before practice. Give a short reason, then your estimate as a whole number."),
 }
 FORMAT = 'Respond in JSON with two fields: "reason" (one or two sentences) and "answer" (a whole number from 0 to 100).'
 SCHEMA = {"type": "object", "properties": {"reason": {"type": "string"}, "answer": {"type": "integer"}}, "required": ["reason", "answer"]}
@@ -81,14 +80,14 @@ def render_feedback(text: str) -> str:
 def render_question(q: dict) -> str:
     lines = ["Question:", q["question"]["stem"]]
     lines += [f"({c['label']}) {c['text']}" for c in q["question"]["choices"]]
-    lines += [f"Correct answer: ({q['answerKey']})", "Feedback:", render_feedback(q.get("feedback-text", "") or "")]
+    lines += ["", f"Correct answer: ({q['answerKey']})", "", "Feedback:", render_feedback(q.get("feedback-text", "") or "")]
     return "\n".join(lines)
 
 
 def build_prompt(q: dict, task: str, config: DatasetConfig) -> str:
-    return "\n\n".join([config.prompt.context,
-                        "Below is one question with its stem, four answer options, correct answer, and feedback.",
-                        render_question(q), TASKS[task], FORMAT])
+    head = "\n\n".join([config.prompt.context, "Below is one question with its stem, four answer options, correct answer, and feedback.",
+                        render_question(q)])
+    return head + "\n\n\n" + TASKS[task] + "\n\n" + FORMAT  # two blank lines set the task apart from the feedback
 
 
 def call_config(params: BaselineParams, config: DatasetConfig, seed: int) -> dict:

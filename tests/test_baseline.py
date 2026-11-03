@@ -51,7 +51,7 @@ class FakeEngine:
 
 def test_prompt_and_jobs():
     p = build_prompt(Q["q1"], "known", CONFIG)
-    assert CONFIG.prompt.context in p and "Question:\nWhat is 1 + 1?" in p and "(a) 2" in p and "Correct answer: (a)" in p and "Feedback:\n- 1 and 1 make 2." in p and "how many already know" in p and '"answer"' in p
+    assert CONFIG.prompt.context in p and "Question:\nWhat is 1 + 1?" in p and "(a) 2" in p and "\n\nCorrect answer: (a)\n\nFeedback:\n- 1 and 1 make 2." in p and "- 1 and 1 make 2.\n\n\nYour task:\nGiven the features of the question and its feedback, estimate how many students (out of 100) already know" in p and '"answer"' in p
     params = BaselineParams(samples=2, prompts=["improve", "known"], limit=None)
     ids = select_questions(Q, CONFIG, params, None)
     assert ids == ["q1", "q2", "q4", "q5", "q6"]  # q3 excluded
