@@ -17,25 +17,11 @@ effect, u_j ~ N(0, sigma_question^2) the question's stable tendency, v_b ~ N(0, 
 the batch's, and w_bc ~ N(0, sigma_call^2) the call's. With `samples` calls per batch and
 condition, Z is the mean over the calls.
 
-Tests. Each statistic is a mean of within-pair differences and its p-value comes from a
-sign-flip permutation test (two-sided). Signs are flipped by the unit that is exchangeable
-under the null: when the two conditions compared are two calls on the same mixed batch, the
-batch (both of its pairs flip together, since the calls share the batch's effect); when the
-comparison is between the two members of a pair, the pair. Two of the tests have no exact
-flipping unit, because pairs whose members share a homogeneous batch are dependent through
-that batch's effect; they flip by pair and the simulation reports how far that is from nominal.
-
-- quality (E1 vs E3, the design's primary): the high member's attribution in its good batches
-  minus the low member's in its bad batches, each averaged over rounds. Flips by pair: approximate.
-- quality_mixed (within E5): high minus low member in the same unlabelled mixed batch and
-  call. Flips by pair: exact, since under the null the two members' roles are exchangeable.
-- inversion (E7 vs E9, primary): the within-pair difference under true labels minus the same
-  under inverted labels, on the same batch. Flips by batch: exact.
-- labels (E7 vs E5, secondary): the within-pair difference under true labels minus under no
-  labels. Flips by batch: exact.
-- composition (E5 vs E1/E3, secondary): the pair's mean attribution in its mixed batch minus
-  the mean of the members' attributions in their homogeneous batches of the same round. Flips
-  by pair: approximate.
+Tests: those of `qscorer/contrasts.py`, run through the same code as the real analysis. The
+batch-level outcome (the feature named for the batch) is taken as "attributed to any of its
+questions". The exact tests flip by batch (inversion, labels, inversion_question) or by pair
+(quality_mixed); quality and composition flip by pair although pairs sharing a homogeneous
+batch are dependent, and the simulation reports how far that is from nominal.
 
 Power is reported at alpha = 0.05 and at 0.0125, the strictest Holm step for the design's
 family of four primary tests (quality and inversion, each for good and bad features). An
@@ -51,8 +37,9 @@ from pydantic import BaseModel, Field
 from scipy.special import expit, logit
 
 from qscorer.batches import CONDITIONS
+from qscorer.contrasts import Layout, benjamini_hochberg, differences, sign_flip
 
-TESTS = ("quality", "quality_mixed", "inversion", "labels", "composition")
+TESTS = ("quality", "quality_mixed", "inversion", "inversion_question", "labels", "composition")
 
 
 class PowerParams(BaseModel):
@@ -69,35 +56,6 @@ class PowerParams(BaseModel):
     features: int = Field(20, ge=1, description="size of the exploratory feature family")
     enriched: int = Field(5, ge=0, description="features in the family that carry the quality effect")
     seed: int = 0
-
-
-class Layout:
-    """The plan as index arrays: for each kind and pool, the plan row of each pair's member in
-    each round (-1 when the pair sits out), plus each row's question and batch index."""
-
-    def __init__(self, plan: pd.DataFrame):
-        self.plan = plan.reset_index(drop=True)
-        self.pairs = np.sort(self.plan.pair.unique())
-        self.rounds = np.sort(self.plan["round"].unique())
-        self.question = pd.factorize(self.plan.id)[0]
-        self.batch = pd.factorize(self.plan.batch)[0]
-        self.n_questions, self.n_batches = self.question.max() + 1, self.batch.max() + 1
-        self.high = (self.plan.pool == "high").to_numpy()
-        self.mixed = (self.plan.kind == "mixed").to_numpy()
-        self.slot = {}
-        pair_pos = pd.Series(np.arange(len(self.pairs)), index=self.pairs)
-        round_pos = pd.Series(np.arange(len(self.rounds)), index=self.rounds)
-        for kind in ("mixed", "good", "bad"):
-            for pool in ("high", "low"):
-                rows = self.plan[(self.plan.kind == kind) & (self.plan.pool == pool)]
-                slot = np.full((len(self.rounds), len(self.pairs)), -1)
-                slot[round_pos[rows["round"]].to_numpy(), pair_pos[rows.pair].to_numpy()] = rows.index.to_numpy()
-                self.slot[kind, pool] = slot
-
-    def pick(self, z: np.ndarray, kind: str, pool: str) -> np.ndarray:
-        """z at each pair's member in each round, NaN where the pair sits out: shape (rounds, pairs)."""
-        slot = self.slot[kind, pool]
-        return np.where(slot >= 0, z[np.maximum(slot, 0)], np.nan)
 
 
 def simulate(layout: Layout, params: PowerParams, delta: float, kappa: float, rng: np.random.Generator) -> dict[str, np.ndarray]:
@@ -120,51 +78,6 @@ def simulate(layout: Layout, params: PowerParams, delta: float, kappa: float, rn
     return z
 
 
-def differences(layout: Layout, z: dict[str, np.ndarray]) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-    """Per test: the within-pair differences and, for each, the unit whose sign flips together
-    (a pair, or a mixed batch in a round). Per-round differences are NaN where a pair sits out."""
-    rounds, pairs = layout.slot["mixed", "high"].shape
-    pair_unit = np.broadcast_to(np.arange(pairs), (rounds, pairs))
-    slot = layout.slot["mixed", "high"]
-    batch_unit = np.where(slot >= 0, layout.batch[np.maximum(slot, 0)], -1)
-
-    def avg(c, kind, pool):
-        v = layout.pick(z[c], kind, pool)
-        n = np.isfinite(v).sum(0)
-        return np.where(n > 0, np.nansum(v, 0) / np.maximum(n, 1), np.nan)
-    m = lambda c, pool: layout.pick(z[c], "mixed", pool)
-    within = lambda c: m(c, "high") - m(c, "low")
-    return {
-        "quality": (avg("E1", "good", "high") - avg("E3", "bad", "low"), np.arange(pairs)),
-        "quality_mixed": (within("E5"), pair_unit),
-        "inversion": (within("E7") - within("E9"), batch_unit),
-        "labels": (within("E7") - within("E5"), batch_unit),
-        "composition": ((m("E5", "high") + m("E5", "low")) / 2 - (layout.pick(z["E1"], "good", "high") + layout.pick(z["E3"], "bad", "low")) / 2, pair_unit),
-    }
-
-
-def sign_flip_p(d: np.ndarray, unit: np.ndarray, flips: int, rng: np.random.Generator) -> float:
-    """Two-sided p-value of the mean of `d` when the signs of its entries are flipped by `unit`
-    (entries with the same unit flip together); NaN entries are left out."""
-    keep = np.isfinite(d)
-    d, unit = d[keep], np.asarray(unit)[keep]
-    codes, units = pd.factorize(unit)
-    t = abs(d.mean())
-    signs = rng.choice([-1.0, 1.0], size=(flips, len(units)))
-    return float((1 + (np.abs(signs[:, codes] @ d) / len(d) >= t - 1e-12).sum()) / (flips + 1))
-
-
-def benjamini_hochberg(p: np.ndarray, q: float) -> np.ndarray:
-    """Which p-values are rejected at FDR q."""
-    order = np.argsort(p)
-    thresholds = q * (np.arange(1, len(p) + 1)) / len(p)
-    below = p[order] <= thresholds
-    k = below.nonzero()[0].max() + 1 if below.any() else 0
-    rejected = np.zeros(len(p), bool)
-    rejected[order[:k]] = True
-    return rejected
-
-
 def run_power(plan: pd.DataFrame, params: PowerParams, progress=print) -> pd.DataFrame:
     """One row per scenario: the implied attribution rates and the rejection rate of each test
     at alpha 0.05 and 0.0125. The delta scenarios also carry the exploratory family's expected
@@ -177,10 +90,19 @@ def run_power(plan: pd.DataFrame, params: PowerParams, progress=print) -> pd.Dat
     rows, quality_p = [], {}
     for delta, kappa in scenarios:
         p = {t: np.empty(params.sims) for t in TESTS}
+        conds = list(CONDITIONS)
         for i in range(params.sims):
             z = simulate(layout, params, delta, kappa, rng)
-            for t, (d, unit) in differences(layout, z).items():
-                p[t][i] = sign_flip_p(d, unit, params.flips, rng)
+            Zq = np.full((1, len(conds), len(layout.plan)), np.nan)
+            for c, v in z.items():
+                Zq[0, conds.index(c)] = v
+            Zb = np.full((1, len(conds), layout.n_batches), np.nan)
+            for c in z:
+                named = pd.Series(Zq[0, conds.index(c)]).groupby(layout.batch).max()
+                Zb[0, conds.index(c), named.index.to_numpy()] = named.to_numpy()
+            for t, (D, unit) in differences(layout, Zb, Zq, "good").items():
+                if t in p:
+                    p[t][i] = sign_flip(D, unit, params.flips, rng)[1][0]
         if kappa == 0.0:
             quality_p[delta] = p["quality_mixed"]
         row = {"delta": delta, "kappa": kappa, "rate_low": params.base_rate, "rate_high": float(expit(logit(params.base_rate) + delta)),
