@@ -215,8 +215,8 @@ def evaluate(ratings: pd.DataFrame, slopes: pd.DataFrame | None, pairs_questions
             e["within_sets"] = {k: v[0] for k, v in within.items()}
             e["within_sets_weighted"] = float(sum(v[0] * v[1] for v in within.values()) / sum(v[1] for v in within.values())) if within else None
         if labels is not None:
-            lab = t.join(labels[["pool", "partner", "selected"]], how="inner")
-            kept = lab[lab.selected.astype(bool)]
+            lab = t.join(labels[["pool", "partner"]], how="inner")
+            kept = lab[lab.partner.fillna("").ne("")]
             hi, lo = kept[kept.pool == "high"].rating, kept[kept.pool == "low"].rating
             if len(hi) and len(lo):
                 e["auc_high_vs_low"] = float((hi.to_numpy()[:, None] > lo.to_numpy()[None, :]).mean() + 0.5 * (hi.to_numpy()[:, None] == lo.to_numpy()[None, :]).mean())

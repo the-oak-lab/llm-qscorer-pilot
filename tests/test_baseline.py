@@ -92,7 +92,7 @@ def test_tables_consistency_and_evaluation():
     c = consistency(samples)
     assert c["known"]["icc_single"] > 0.99 and c["known"]["samples_for_0.90"] == 1 and 0.9 < c["improve"]["icc_single"] < 1
     slopes = pd.DataFrame({"id": list(Q), "set": ["s1"] * 3 + ["s2"] * 3, "slope": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6], "first_practice_accuracy": [.5, .6, .4, .5, .7, .3]})
-    pairs_q = pd.DataFrame({"id": list(Q), "pool": ["low", "", "high", "low", "", "high"], "partner": ["q3", "", "q1", "q6", "", "q4"], "selected": [True, False, True, True, False, True]})
+    pairs_q = pd.DataFrame({"id": list(Q), "pool": ["low", "", "high", "low", "", "high"], "partner": ["q3", "", "q1", "q6", "", "q4"]})
     e = evaluate(ratings, slopes, pairs_q, boot=50)
     assert abs(e["improve"]["spearman"] - 1) < 1e-9 and e["improve"]["auc_high_vs_low"] == 0.75 and e["improve"]["high_member_rated_higher"] == 1.0  # q3 (31) < q4 (41) across pairs, but each pair is ordered and e["improve"]["kept_pairs_with_both_rated"] == 2
     assert abs(e["known"]["spearman"] - 1) < 1e-9 and "within_sets" in e["known"]

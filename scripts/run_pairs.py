@@ -1,9 +1,10 @@
-"""Stage 0.2 and 0.4 on one dataset: high- and low-learning pools, matched pairs with the
-separation test, and the selection diagnostics, from the Stage 0.1 table.
+"""Stage 0.2 and 0.4 on one dataset: high- and low-learning pools, matched pairs, and the
+selection diagnostics, from the Stage 0.1 table.
 
-Run:  uv run python scripts/run_pairs.py --dataset spacing-exp4 [--slopes results/spacing-exp4/slopes] [--quantile 0.25]
-          [--caliper 0.10] [--separation 0.90] [--min-difference 0.20] [--reliability-splits 5] [--seed 0] [--out results] [--tag NAME]
-Out:  results/<dataset>/pairs/questions.csv, pairs.csv, diagnostics.json
+Run:  uv run python scripts/run_pairs.py --dataset spacing-exp4 [--slopes results/spacing-exp4/slopes] [--quantile 0.333]
+          [--caliper 0.10] [--separation 0.95] [--min-difference 0.20] [--reliability-splits 5] [--seed 0] [--out results] [--tag NAME]
+Out:  results/<dataset>/pairs/questions.csv (set, pool, partner: a labelled question is one with a partner), pairs.csv, diagnostics.json
+Questions listed under `exclude` in the dataset config are left out before the pools are formed.
 """
 import argparse
 import json
@@ -49,10 +50,9 @@ def main():
 
     p = d["pairs"]
     print(f"{config.name}: pools per set {{" + ", ".join(f"{s}: {v['high']}/{v['low']}" for s, v in d["pools"].items()) + "}")
-    print(f"  pairs: {p['matched']} matched within a caliper of {params.caliper:.2f}, {p['selected']} selected (P >= {params.separation}, difference >= {params.min_difference}); "
-          f"{p['selected_at_separation']['0.95']} at P >= 0.95; {p['separated_but_below_min_difference']} separated but below the minimum difference; "
-          f"without a caliper {p['without_caliper']['matched']} matched, {p['without_caliper']['selected']} selected")
-    print(f"  selected pairs: median slope difference {p['selected_slope_difference_median']:.3f}; accuracy difference quantiles {{" +
+    print(f"  pairs: {p['selected']} (caliper {params.caliper:.2f}, P >= {params.separation}, difference >= {params.min_difference}), per set {p['per_set']}; "
+          f"at P >= 0.90 / 0.95 / 0.99: {' / '.join(str(v) for v in p['at_separation'].values())}; without a caliper {p['without_caliper']['selected']}")
+    print(f"  median slope difference {p['slope_difference'].get('0.5', float('nan')):.3f}; accuracy difference quantiles {{" +
           ", ".join(f"{k}: {v:.3f}" for k, v in p["accuracy_difference"].items()) + "}")
     a = d["alternatives"]
     print(f"  alternatives: A {a['A_quantiles_only']}, B {a['B_meaningful_slope']}, C {a['C_sign_probability']}")

@@ -1,21 +1,24 @@
 """Stage 0.2 (`pairs`): high- and low-learning questions and matched pairs; Stage 0.4: the
 selection diagnostics.
 
-From the Stage 0.1 table (`slopes.csv`): within each item set, supported questions whose
-posterior mean slope is in the top quarter are high-learning candidates and those in the bottom
-quarter low-learning candidates. High candidates are matched to low candidates of the same set
-on observed first-practice accuracy, closest pairs first, each question used once, no pair
-farther apart than the caliper. A pair is kept when the posterior probability that the high
-question's slope exceeds the low question's reaches `separation` and the difference of
-posterior means reaches `min_difference`. The two posteriors are taken as independent: the
-questions share only the student effects, and on the spacing banks the joint posterior changes
-the probability by at most 0.0005.
+From the Stage 0.1 table (`slopes.csv`), minus the questions the dataset config excludes from
+the Gemini stages (they stay in the fit): within each item set, supported questions whose
+posterior mean slope is in the top third are high-learning candidates and those in the bottom
+third low-learning candidates. A high candidate and a low candidate of the same set can form a
+pair when their observed first-practice accuracies differ by no more than the caliper, the
+posterior probability that the high question's slope exceeds the low question's reaches
+`separation`, and the difference of posterior means reaches `min_difference`. Among all such
+pairs, the matching keeps the largest number that use each question once and, among matchings
+of that size, the one with the smallest total accuracy difference (a minimum-cost assignment
+per set). The two posteriors are taken as independent: the questions share only the student
+effects, and on the spacing banks the joint posterior changes the probability by at most 0.0005.
 
 The diagnostics report pool and pair counts per set, the distributions of accuracy and slope
-differences and separation probabilities, how many pairs survive at 0.95 and without a caliper,
-the pool sizes under the design's alternative definitions (Stage 0.3), the slope's relation to
-difficulty, and, with `reliability_splits`, how the labels and pairs replicate across random
-halves of the students (each half refitted and the whole procedure redone).
+differences and separation probabilities, how many pairs the rule gives at other separation
+thresholds and without a caliper, the pool sizes under the design's alternative definitions
+(Stage 0.3), the slope's relation to difficulty, and, with `reliability_splits`, how the labels
+and pairs replicate across random halves of the students (each half refitted and the whole
+procedure redone).
 """
 from __future__ import annotations
 
@@ -24,19 +27,20 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.optimize import linear_sum_assignment
 from scipy.stats import norm
 
 from qscorer.config import DatasetConfig, PairParams, SlopeParams
 from qscorer.data import item_sets, load_questions, practice_steps, read_datashop
 from qscorer.slopes import question_table
 
-PAIR_COLUMNS = ["set", "high", "low", "accuracy_high", "accuracy_low", "accuracy_difference"]
+PAIR_COLUMNS = ["set", "high", "low", "accuracy_high", "accuracy_low", "accuracy_difference", "slope_difference", "difference_sd", "p_separation"]
 
 
 @dataclass
 class PairResult:
-    questions: pd.DataFrame   # one row per question: set, pool, partner, selected
-    pairs: pd.DataFrame       # one row per matched pair, with its separation test
+    questions: pd.DataFrame   # one row per question: set, pool, partner (a labelled question is one with a partner)
+    pairs: pd.DataFrame       # one row per pair, with its accuracy and slope differences and separation probability
     diagnostics: dict
 
 
@@ -50,41 +54,40 @@ def classify(table: pd.DataFrame, quantile: float) -> pd.Series:
     return pool
 
 
-def match(table: pd.DataFrame, pool: pd.Series, caliper: float | None) -> pd.DataFrame:
-    """Greedy closest-first matching of high to low questions within each set on first-practice
-    accuracy, each question used once; `caliper = None` matches without a limit."""
+def match(table: pd.DataFrame, pool: pd.Series, caliper: float | None, separation: float, min_difference: float) -> pd.DataFrame:
+    """Within each set, the largest set of high-low pairs within the caliper (`None`: no
+    limit) that pass the separation test, each question used once, and among those the set
+    with the smallest total accuracy difference. Every admissible pair scores 1 minus its
+    accuracy difference; the assignment that maximises the sum takes the most pairs first and
+    the closest pairs second. Each pair carries its slope difference (high minus low), the
+    posterior sd of that difference under independence, and P(slope_high > slope_low | y)."""
     rows = []
-    acc = table.first_practice_accuracy
+    acc, slope, sd = table.first_practice_accuracy, table.slope, table.slope_sd
     for s, g in table.groupby("set"):
         high, low = g.index[pool[g.index] == "high"], g.index[pool[g.index] == "low"]
-        candidates = sorted((abs(acc[h] - acc[l]), h, l) for h in high for l in low if np.isfinite(acc[h]) and np.isfinite(acc[l]))
-        used: set[str] = set()
-        for d, h, l in candidates:
-            if caliper is not None and d > caliper:
-                break
-            if h in used or l in used:
-                continue
-            used.update((h, l))
-            rows.append({"set": s, "high": h, "low": l, "accuracy_high": acc[h], "accuracy_low": acc[l], "accuracy_difference": d})
+        if not len(high) or not len(low):
+            continue
+        gap = np.abs(acc[high].to_numpy(float)[:, None] - acc[low].to_numpy(float)[None, :])
+        diff = slope[high].to_numpy(float)[:, None] - slope[low].to_numpy(float)[None, :]
+        diff_sd = np.hypot(sd[high].to_numpy(float)[:, None], sd[low].to_numpy(float)[None, :])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            p = norm.cdf(diff / diff_sd)
+        admissible = np.isfinite(gap) & (gap <= (np.inf if caliper is None else caliper)) & np.isfinite(p) & (p >= separation) & (diff >= min_difference)
+        cost = np.where(admissible, gap - 1.0, 0.0)
+        for i, j in zip(*linear_sum_assignment(cost)):
+            if admissible[i, j]:
+                h, l = high[i], low[j]
+                rows.append({"set": s, "high": h, "low": l, "accuracy_high": acc[h], "accuracy_low": acc[l], "accuracy_difference": gap[i, j],
+                             "slope_difference": diff[i, j], "difference_sd": diff_sd[i, j], "p_separation": p[i, j]})
     return pd.DataFrame(rows, columns=PAIR_COLUMNS)
 
 
-def separate(pairs: pd.DataFrame, table: pd.DataFrame, separation: float, min_difference: float) -> pd.DataFrame:
-    """Add to each pair the slope difference (high minus low), its posterior sd under
-    independence, P(slope_high > slope_low | y), and whether the pair is selected."""
-    diff = table.slope[pairs.high].to_numpy(float) - table.slope[pairs.low].to_numpy(float)
-    sd = np.hypot(table.slope_sd[pairs.high].to_numpy(float), table.slope_sd[pairs.low].to_numpy(float))
-    with np.errstate(invalid="ignore", divide="ignore"):
-        p = norm.cdf(diff / sd)
-    return pairs.assign(slope_difference=diff, difference_sd=sd, p_separation=p,
-                        selected=np.isfinite(p) & (p >= separation) & (diff >= min_difference))
-
-
-def select_pairs(table: pd.DataFrame, params: PairParams) -> tuple[pd.Series, pd.DataFrame]:
-    """Stage 0.2 on a Stage 0.1 table indexed by id: the pools and the tested pairs."""
+def select_pairs(table: pd.DataFrame, params: PairParams, exclude: list[str] = ()) -> tuple[pd.Series, pd.DataFrame]:
+    """Stage 0.2 on a Stage 0.1 table indexed by id, without the excluded questions: the pools
+    and the pairs."""
+    table = table[~table.index.isin(exclude)]
     pool = classify(table, params.quantile)
-    pairs = separate(match(table, pool, params.caliper), table, params.separation, params.min_difference)
-    return pool, pairs
+    return pool, match(table, pool, params.caliper, params.separation, params.min_difference)
 
 
 def quantiles(x: pd.Series, qs: tuple[float, ...]) -> dict[str, float]:
@@ -104,8 +107,8 @@ def diagnostics(table: pd.DataFrame, pool: pd.Series, pairs: pd.DataFrame, param
     supported = table[table.supported]
     pools = {s: {"questions": int(len(g)), "high": int((pool[g.index] == "high").sum()), "low": int((pool[g.index] == "low").sum())}
              for s, g in supported.groupby("set")}
-    free = separate(match(table, pool, None), table, params.separation, params.min_difference)
-    sel = pairs[pairs.selected]
+    at = lambda sep, cal: match(table, pool, cal, sep, params.min_difference)
+    free = at(params.separation, None)
     with np.errstate(invalid="ignore", divide="ignore"):
         z = lambda eps: (supported.slope - eps) / supported.slope_sd
     alternatives = {
@@ -117,16 +120,13 @@ def diagnostics(table: pd.DataFrame, pool: pd.Series, pairs: pd.DataFrame, param
         "params": params.model_dump(mode="json"),
         "pools": pools,
         "pairs": {
-            "matched": int(len(pairs)), "selected": int(len(sel)),
-            "per_set": {s: {"matched": int(len(g)), "selected": int(g.selected.sum())} for s, g in pairs.groupby("set")},
+            "selected": int(len(pairs)),
+            "per_set": {s: int(len(g)) for s, g in pairs.groupby("set")},
             "accuracy_difference": quantiles(pairs.accuracy_difference, (.25, .5, .75, 1.0)),
             "slope_difference": quantiles(pairs.slope_difference, (.1, .25, .5, .75, .9)),
             "p_separation": quantiles(pairs.p_separation, (.1, .25, .5, .75, .9)),
-            "selected_at_separation": {"0.90": int(((pairs.p_separation >= .90) & (pairs.slope_difference >= params.min_difference)).sum()),
-                                       "0.95": int(((pairs.p_separation >= .95) & (pairs.slope_difference >= params.min_difference)).sum())},
-            "separated_but_below_min_difference": int(((pairs.p_separation >= params.separation) & (pairs.slope_difference < params.min_difference)).sum()),
-            "selected_slope_difference_median": float(sel.slope_difference.median()) if len(sel) else float("nan"),
-            "without_caliper": {"matched": int(len(free)), "selected": int(free.selected.sum()),
+            "at_separation": {f"{sep:.2f}": int(len(at(sep, params.caliper))) for sep in (0.90, 0.95, 0.99)},
+            "without_caliper": {"selected": int(len(free)),
                                 "accuracy_difference_median": float(free.accuracy_difference.median()) if len(free) else float("nan")},
         },
         "alternatives": alternatives,
@@ -153,8 +153,8 @@ def split_half_replication(config: DatasetConfig, slope_params: SlopeParams, par
         for part in (steps[steps[config.student_column].isin(half)], steps[~steps[config.student_column].isin(half)]):
             t = question_table(part, config, slope_params)[0]
             t.insert(0, "set", sets.reindex(t.index))
-            pool, pr = select_pairs(t, params)
-            tables.append(t); pools.append(pool); pairs.append(pr[pr.selected])
+            pool, pr = select_pairs(t, params, config.exclude)
+            tables.append(t); pools.append(pool); pairs.append(pr)
         both = pd.concat([pools[0].rename("a"), pools[1].rename("b")], axis=1, join="inner").replace("", "middle")
         both = both[tables[0].supported.reindex(both.index).fillna(False) & tables[1].supported.reindex(both.index).fillna(False)]
         extreme = both[(both.a != "middle") & (both.b != "middle")]
@@ -174,15 +174,15 @@ def split_half_replication(config: DatasetConfig, slope_params: SlopeParams, par
 
 def run_pairs(table: pd.DataFrame, params: PairParams, config: DatasetConfig | None = None,
               slope_params: SlopeParams | None = None) -> PairResult:
-    """Stage 0.2 and 0.4 on a Stage 0.1 table (`slopes.csv`, one row per question). The
-    replication check refits the model and needs the dataset config and the Stage 0.1 params."""
+    """Stage 0.2 and 0.4 on a Stage 0.1 table (`slopes.csv`, one row per question), without
+    the questions the config excludes. The replication check refits the model and needs the
+    dataset config and the Stage 0.1 params."""
     t = table.set_index("id") if "id" in table.columns else table
+    t = t[~t.index.isin(config.exclude if config else [])]
     pool, pairs = select_pairs(t, params)
     partner = pd.concat([pd.Series(pairs.low.to_numpy(), index=pairs.high), pd.Series(pairs.high.to_numpy(), index=pairs.low)])
-    selected = pd.concat([pd.Series(pairs.selected.to_numpy(), index=pairs.high), pd.Series(pairs.selected.to_numpy(), index=pairs.low)])
     questions = pd.DataFrame({"set": t.set, "supported": t.supported, "slope": t.slope, "slope_sd": t.slope_sd,
-                              "first_practice_accuracy": t.first_practice_accuracy, "pool": pool,
-                              "partner": partner.reindex(t.index).fillna(""), "selected": selected.reindex(t.index).fillna(False).astype(bool)})
+                              "first_practice_accuracy": t.first_practice_accuracy, "pool": pool, "partner": partner.reindex(t.index).fillna("")})
     questions.index.name = "id"
     diag = diagnostics(t, pool, pairs, params)
     if params.reliability_splits:
