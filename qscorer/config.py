@@ -98,6 +98,22 @@ class BaselineParams(BaseModel):
     seed: int = 0
 
 
+class DiscoveryParams(BaseModel):
+    """Parameters of Stage 2.2: feature discovery, one batch and condition per call."""
+    model: str = Field("gemini-3.8-flash", description="Gemini model id")
+    samples: int = Field(2, ge=1, description="independent calls per batch and condition (each with its own seed)")
+    temperature: float = Field(1.0, ge=0)
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="Gemini thinking level")
+    thoughts: bool = Field(True, description="ask for thought summaries and keep them per call")
+    max_output_tokens: int = Field(24576, ge=64, description="the budget covers thinking and the answer together; a feature-discovery call thinks for 2,000 to 8,000 tokens")
+    concurrency: int = Field(8, ge=1)
+    delay: float = Field(0.05, ge=0)
+    timeout: float = Field(300.0, gt=0)
+    passes: int = Field(3, ge=1)
+    limit: int | None = Field(None, ge=1, description="ask only this many batches of each kind, from the first round (pilots)")
+    seed: int = 0
+
+
 def load_dataset_config(name_or_path: str | Path, root: Path = ROOT) -> DatasetConfig:
     """Load `configs/datasets/<name>.toml`, or a config file given by path, with paths resolved."""
     path = Path(name_or_path)

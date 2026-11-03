@@ -1,6 +1,6 @@
 """Stage 2.1 on one dataset: the batch plan from the Stage 0.2 pairs.
 
-Run:  uv run python scripts/run_batches.py --dataset spacing-exp4 [--rounds 3] [--seed 0] [--out results] [--tag NAME]
+Run:  uv run python scripts/run_batches.py --dataset spacing-exp4 [--rounds 5] [--seed 0] [--out results] [--tag NAME]
 Out:  results/<dataset>/batches[-tag]/batches.csv (one row per question in a batch: round, set, kind, batch, position, id,
       pool, pair, accuracy), summary.json
 """

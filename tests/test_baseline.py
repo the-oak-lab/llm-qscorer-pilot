@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from qscorer.baseline import (accept, build_jobs, build_prompt, consistency, evaluate, parse_answer, rating_table, render_feedback,
-                              run_baseline, sample_table, select_questions)
+from qscorer.baseline import (accept, build_jobs, build_prompt, consistency, evaluate, parse_answer, rating_table, run_baseline, sample_table,
+                              select_questions)
+from qscorer.data import render_feedback
 from qscorer.config import BaselineParams, DatasetConfig, PhaseFilter
 from qscorer.gemini import Job, parse
 

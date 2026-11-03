@@ -12,11 +12,12 @@ Also here: the practice schedule of each (student, question) pair, attached from
 transactions when the config names a `schedule_column` (the rollup drops it; the schedule is
 constant within a pair, and the most frequent value wins where it is not), a question's item
 set (the questions seen by the same set of classes) and its observed accuracies, which Stage
-0.2 matches on.
+0.2 matches on; and the rendering of a question's text for the Gemini stages.
 """
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -134,3 +135,37 @@ def observed_accuracy(steps: pd.DataFrame, config: DatasetConfig, ids: list[str]
         out[f"{name}_accuracy"] = g.mean()
         out[f"n_{name}"] = g.size()
     return out
+
+
+BULLET = re.compile(r"\s(?:-|\u2022)\s+(?=[A-Z$(*\u201c\"'])")  # a bullet marker: " - " or " \u2022 " before a capital, formula, bold or quote
+
+
+def render_feedback(text: str) -> str:
+    """The feedback as bullet lines when the export wrote it as bullets, else as it is. The
+    exports flattened bullet lists onto one line: "- A ... - B ..." (exp4, exp3) or "\u2022 A ... \u2022 B"
+    (exp3). A " - " before a lowercase word is a dash inside a bullet, not a new one, and a
+    minus sign inside $...$ math is never a marker."""
+    text = text.strip()
+    if not text.startswith(("- ", "\u2022")):
+        return text
+    text = text.lstrip("-\u2022").lstrip()  # the first marker
+    items, current = [], ""
+    for i, segment in enumerate(text.split("$")):  # odd segments are inside $...$
+        if i % 2:
+            current += "$" + segment + "$"
+            continue
+        pieces = BULLET.split(segment)
+        current += pieces[0]
+        for piece in pieces[1:]:
+            items.append(current)
+            current = piece
+    items.append(current)
+    return "\n".join(f"- {t.strip()}" for t in items if t.strip())
+
+
+def render_question(q: dict, header: str = "Question") -> str:
+    """The question as the Gemini stages show it: `header`, stem, options, key, feedback."""
+    lines = [f"{header}:", q["question"]["stem"]]
+    lines += [f"({c['label']}) {c['text']}" for c in q["question"]["choices"]]
+    lines += ["", f"Correct answer: ({q['answerKey']})", "", "Feedback:", render_feedback(q.get("feedback-text", "") or "")]
+    return "\n".join(lines)

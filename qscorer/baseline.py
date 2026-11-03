@@ -19,7 +19,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import platform
-import re
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
@@ -29,7 +28,7 @@ import pandas as pd
 from scipy.stats import rankdata, spearmanr
 
 from qscorer.config import BaselineParams, DatasetConfig
-from qscorer.data import load_questions
+from qscorer.data import load_questions, render_question
 from qscorer.gemini import Job, parse
 
 TASKS = {
@@ -49,39 +48,6 @@ class BaselineResult:
     evaluation: dict
     summary: dict
     example: str
-
-
-BULLET = re.compile(r"\s(?:-|\u2022)\s+(?=[A-Z$(*\u201c\"'])")  # a bullet marker: " - " or " \u2022 " before a capital, formula, bold or quote
-
-
-def render_feedback(text: str) -> str:
-    """The feedback as bullet lines when the export wrote it as bullets, else as it is. The
-    exports flattened bullet lists onto one line: "- A ... - B ..." (exp4, exp3) or "\u2022 A ... \u2022 B"
-    (exp3). A " - " before a lowercase word is a dash inside a bullet, not a new one, and a
-    minus sign inside $...$ math is never a marker."""
-    text = text.strip()
-    if not text.startswith(("- ", "\u2022")):
-        return text
-    text = text.lstrip("-\u2022").lstrip()  # the first marker
-    items, current = [], ""
-    for i, segment in enumerate(text.split("$")):  # odd segments are inside $...$
-        if i % 2:
-            current += "$" + segment + "$"
-            continue
-        pieces = BULLET.split(segment)
-        current += pieces[0]
-        for piece in pieces[1:]:
-            items.append(current)
-            current = piece
-    items.append(current)
-    return "\n".join(f"- {t.strip()}" for t in items if t.strip())
-
-
-def render_question(q: dict) -> str:
-    lines = ["Question:", q["question"]["stem"]]
-    lines += [f"({c['label']}) {c['text']}" for c in q["question"]["choices"]]
-    lines += ["", f"Correct answer: ({q['answerKey']})", "", "Feedback:", render_feedback(q.get("feedback-text", "") or "")]
-    return "\n".join(lines)
 
 
 def build_prompt(q: dict, task: str, config: DatasetConfig) -> str:

@@ -33,7 +33,7 @@ COLUMNS = ["round", "set", "kind", "batch", "position", "id", "pool", "pair", "a
 
 
 class BatchParams(BaseModel):
-    rounds: int = Field(3, ge=1, description="randomised batching rounds")
+    rounds: int = Field(5, ge=1, description="randomised batching rounds")
     tries: int = Field(200, ge=1, description="shuffles tried per grouping to avoid companions from earlier rounds")
     seed: int = 0
 
