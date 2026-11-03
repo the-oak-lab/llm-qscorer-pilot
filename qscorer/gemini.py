@@ -4,7 +4,7 @@ Every call is one job (an id, the contents, a config dict for `GenerateContentCo
 concurrently under a semaphore, with a small start-delay ramp; a call that raises comes back as
 an error record instead of sinking the batch, and a call that hangs fails after `timeout`
 seconds. The raw response of every call (thought parts, text parts, finish reason, token
-counts) is appended to a JSONL log as it arrives, so an interrupted run resumes from the log,
+counts, seconds taken) is appended to a JSONL log as it arrives, so an interrupted run resumes from the log,
 and failed or unparsable calls are resent in later passes. `parse` reduces a raw record to the
 answer text, the thought summary and the token counts.
 """
@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -85,13 +86,14 @@ class Gemini:
         await asyncio.sleep(self._next_delay)
         config = types.GenerateContentConfig.model_validate(job.config | {"http_options": {"timeout": int(self.timeout * 1000)}})
         async with self.semaphore:
+            start = time.monotonic()
             try:
                 response = await self.client.aio.models.generate_content(model=self.model, contents=job.contents, config=config)
                 d = response.to_json_dict()
                 d.pop("sdk_http_response", None)  # headers and status, not part of the answer
-                return {"id": job.id} | d
+                return {"id": job.id, "elapsed": round(time.monotonic() - start, 2)} | d
             except Exception as e:  # one failed call must not sink the batch
-                return {"id": job.id, "error": f"{type(e).__name__}: {e}"}
+                return {"id": job.id, "elapsed": round(time.monotonic() - start, 2), "error": f"{type(e).__name__}: {e}"}
 
     async def many(self, jobs: list[Job], log: Path, passes: int = 3, accept: Callable[[dict], bool] | None = None,
                    progress: Callable[[str], None] = print) -> dict[str, dict]:
