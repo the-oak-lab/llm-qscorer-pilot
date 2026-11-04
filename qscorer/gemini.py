@@ -9,6 +9,8 @@ vector for the lot.
 """
 from __future__ import annotations
 
+import asyncio
+
 from google import genai
 from google.genai import types
 
@@ -21,7 +23,23 @@ class Gemini(Backend):
 
     def __init__(self, model: str, key: str | None = None, concurrency: int = 8, delay: float = 0.05, timeout: float = 180.0):
         super().__init__(model, concurrency, delay, timeout)
-        self.client = genai.Client(api_key=key or api_key("GEMINI_API_KEY"))
+        self.key = key or api_key("GEMINI_API_KEY")
+        self._client: genai.Client | None = None
+        self._loop = None
+
+    @property
+    def client(self) -> genai.Client:
+        """One client per event loop: every `many` or `embed` runs its own loop, and the async
+        client's connection pool belongs to the loop it was first used in (a connection reused
+        in a later loop fails with "Event loop is closed")."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if self._client is None or self._loop is not loop:
+            self._client = genai.Client(api_key=self.key)
+            self._loop = loop
+        return self._client
 
     @staticmethod
     def config(job: Job) -> dict:

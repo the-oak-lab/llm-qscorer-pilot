@@ -119,26 +119,53 @@ class DiscoveryParams(BaseModel):
 
 
 class CanonParams(BaseModel):
-    """Parameters of Stage 2.3's normalisation: embedding, clustering, polarity and naming."""
+    """Parameters of Stage 2.3's normalisation: embedding, clustering, naming, splitting and consolidation into a checklist."""
     backend: Literal["gemini", "openrouter"] = Field("gemini", description="which API: gemini (google-genai, GEMINI_API_KEY) or openrouter (the OpenAI chat-completions format, OPENROUTER_API_KEY)")
     base_url: str | None = Field(None, description="openrouter only: another server of the OpenAI format (default https://openrouter.ai/api/v1)")
     embedding_model: str = Field("gemini-embedding-2", description="embedding model id on the backend (e.g. google/gemini-embedding-2 on OpenRouter)")
     prefix: str = Field("task: clustering | query: ", description="the model's task instruction, put in front of every text")
     embed_batch: int = Field(100, ge=1, le=100, description="texts per embedding request (the API's maximum is 100)")
     embed_concurrency: int = Field(8, ge=1)
-    k_max: int = Field(400, ge=2, description="largest number of clusters considered for the elbow")
-    k_grid: list[int] = Field([10, 15, 20, 30, 40, 50, 60, 80, 100, 125, 150, 200, 250, 300, 400], description="cuts at which the two-call stability is measured")
-    stability_shuffles: int = Field(20, ge=1, description="shuffled pairings of calls for the stability baseline")
-    model: str = Field("gemini-3.8-flash", description="model for the polarity and naming calls")
-    thinking: Literal["minimal", "low", "medium", "high"] = "low"
-    polarity_batch: int = Field(25, ge=1, description="raw features classified per polarity call")
+    k: int = Field(50, ge=2, description="clusters cut from the Ward tree before naming; a coarse budget, since the consolidation call merges what the cut splits")
+    min_split: int = Field(20, ge=2, description="an incoherent cluster is split into its two Ward children only when both children have at least this many members")
+    stability_shuffles: int = Field(20, ge=1, description="shuffled pairings of calls for the two-call stability baseline (a diagnostic of the cut)")
+    model: str = Field("gemini-3.8-flash", description="model for the naming and consolidation calls")
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("low", description="reasoning level of the naming calls")
+    consolidate_thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="reasoning level of the one consolidation call (high thinks past a 32k budget on 70 leaves)")
     members_shown: int = Field(40, ge=5, description="cluster members shown to the naming call (a random sample when the cluster is larger)")
+    min_coverage: float = Field(0.9, gt=0, le=1, description="share of the leaves a consolidation answer must assign to be accepted; leaves left unassigned become items of their own")
     temperature: float = 1.0
     max_output_tokens: int = 8192
     concurrency: int = Field(64, ge=1)
     delay: float = 0.02
-    timeout: float = 300.0
+    timeout: float = Field(600.0, gt=0, description="seconds before a hanging call fails; the consolidation call thinks for minutes")
     passes: int = 3
+    seed: int = 0
+
+
+class PresenceParams(BaseModel):
+    """Parameters of Stage 3.2: checklist scoring, one question per call, every item of the checklist judged present or absent."""
+    backend: Literal["gemini", "openrouter"] = Field("gemini", description="which API: gemini (google-genai, GEMINI_API_KEY) or openrouter (the OpenAI chat-completions format, OPENROUTER_API_KEY)")
+    base_url: str | None = Field(None, description="openrouter only: another server of the OpenAI format (default https://openrouter.ai/api/v1)")
+    model: str = Field("gemini-3.8-flash", description="model id on the backend (e.g. google/gemini-3.8-flash on OpenRouter)")
+    samples: int = Field(2, ge=1, description="independent calls per question (each with its own seed); two or more measure the agreement of the scoring")
+    temperature: float = Field(1.0, ge=0)
+    thinking: Literal["minimal", "low", "medium", "high"] = Field("medium", description="reasoning level")
+    thoughts: bool = Field(True, description="ask for thought summaries and keep them per call")
+    max_output_tokens: int = Field(16384, ge=64)
+    concurrency: int = Field(32, ge=1)
+    delay: float = Field(0.02, ge=0)
+    timeout: float = Field(300.0, gt=0)
+    passes: int = Field(3, ge=1)
+    limit: int | None = Field(None, ge=1, description="score only this many questions, spread over the item sets (pilots)")
+    seed: int = 0
+
+
+class PredictParams(BaseModel):
+    """Parameters of Stage 3.3: the ridge regression of the practice slope on the checklist scores."""
+    alphas: list[float] = Field([0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0], description="ridge penalties tried; the one with the best leave-one-set-out correlation is kept")
+    high_p: float = Field(0.95, description="a question whose posterior probability of a positive slope is at least this is credibly high-learning")
+    low_p: float = Field(0.70, description="at most this, credibly low-learning")
     seed: int = 0
 
 

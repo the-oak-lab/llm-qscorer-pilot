@@ -1,12 +1,12 @@
-"""The normalisation without the network: a fake embedder with planted clusters, the dispersion curve and knee, the stability
-measure, polarity and naming parsing, and the run end to end with a fake engine."""
+"""The normalisation without the network: a fake embedder with planted families, the stability measure, the parsers, the Ward children,
+and the run end to end with a fake engine that names clusters from their first member and consolidates by name."""
 import json
 
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import linkage
 
-from qscorer.canon import cut, dispersion_curve, knee, parse_name, parse_polarities, run_canon, stability
+from qscorer.canon import children, cut, parse_checklist, parse_name, run_canon, stability
 from qscorer.config import CanonParams, DatasetConfig, PhaseFilter
 from tests.test_baseline import raw
 
@@ -15,8 +15,8 @@ GROUPS = ["distractor refutation in feedback", "lexical overlap between stem and
 
 
 def fake_features(n_batches=6, samples=2, seed=0):
-    """Each batch's calls name one feature from each of two of the three families (batch b skips family b mod 3), so the two calls on a
-    batch agree with each other more than with other batches' calls; family 0 alternates presence and absence."""
+    """Each batch's calls name one feature from each of two of the three families (batch b skips family b mod 3); family 0 alternates
+    presence and absence, so a cut into four clusters separates its two polarities and the consolidation must merge them back."""
     rng = np.random.default_rng(seed)
     rows = []
     for b in range(n_batches):
@@ -31,11 +31,13 @@ def fake_features(n_batches=6, samples=2, seed=0):
 
 
 class Engine:
-    """Embeds by family (a family centre plus noise); answers polarity from the name and names clusters from their first member."""
-    def __init__(self):
+    """Embeds by family and polarity (a centre plus noise); names a group from its first member; consolidates leaves by family."""
+    def __init__(self, incoherent: set[str] = frozenset()):
         rng = np.random.default_rng(1)
-        self.centres = rng.normal(size=(len(GROUPS), 16))
+        self.centres = rng.normal(size=(len(GROUPS) + 1, 16))
         self.texts = None
+        self.incoherent = incoherent      # names of groups answered as incoherent
+        self.consolidations = 0
 
     def describe(self):
         return {"backend": "fake"}
@@ -46,19 +48,28 @@ class Engine:
         out = []
         for t in texts:
             g = next(i for i, name in enumerate(GROUPS) if name in t)
-            out.append(self.centres[g] + 0.05 * rng.normal(size=16))
+            c = self.centres[g] + (0.6 * self.centres[3] if t.startswith("Absence") else 0)
+            out.append(c + 0.05 * rng.normal(size=16))
         return out
 
     def many(self, jobs, log, passes, accept, progress):
         done = {}
         for j in jobs:
             kind = j.id.split("|")[0]
-            if kind == "polarity":
-                lines = [l for l in j.prompt.split("\n") if l[:1].isdigit()]
-                answer = {"polarities": [{"index": int(l.split(".")[0]), "polarity": "absence" if "Absence" in l else "presence"} for l in lines]}
-            else:
+            if kind == "name":
                 first = j.prompt.split("\n- ")[1].split(":")[0]
-                answer = {"name": first.replace("Absence of ", ""), "definition": "The feedback or question has this property.", "coherent": True, "note": ""}
+                name = first.replace("Absence of ", "")
+                answer = {"name": name, "definition": f"The item has {name}.", "criterion": f"it has {name}", "part": "feedback",
+                          "coherent": name not in self.incoherent, "sub_characteristics": [] if name not in self.incoherent else ["a", "b"]}
+            else:
+                self.consolidations += 1
+                lines = [l for l in j.prompt.split("\n") if l.startswith("c")]
+                by_name = {}
+                for l in lines:
+                    lid, rest = l.split(". ", 1)
+                    by_name.setdefault(rest.split(":")[0], []).append(lid)
+                answer = {"items": [{"name": n, "definition": f"The item has {n}.", "criterion": f"it has {n}", "part": "feedback", "sources": ids}
+                                    for n, ids in by_name.items()]}
             r = raw(j.id, text=json.dumps(answer))
             with open(log, "a") as f:
                 f.write(json.dumps(r) + "\n")
@@ -67,22 +78,20 @@ class Engine:
         return done
 
 
-def test_curve_knee_and_stability():
+def test_stability_and_children():
     rng = np.random.default_rng(0)
     X = np.concatenate([rng.normal(loc=c, scale=0.02, size=(30, 4)) for c in (np.array([1, 0, 0, 0.]), np.array([0, 1, 0, 0.]), np.array([0, 0, 1, 0.]))])
     X /= np.linalg.norm(X, axis=1, keepdims=True)
     Z = linkage(X, method="ward")
-    curve = dispersion_curve(Z, 20)
-    assert curve.k.tolist() == list(range(1, 21)) and curve.dispersion.is_monotonic_decreasing and curve.dispersion.iloc[0] > 10 * curve.dispersion.iloc[2]
-    assert knee(curve.k.to_numpy(), curve.dispersion.to_numpy()) == 3
     labels = cut(Z, 3)
     assert len(set(labels[:30])) == 1 and len(set(labels)) == 3
+    kids = children(Z, np.flatnonzero(labels == labels[0]))
+    assert len(kids) == 2 and sorted(np.concatenate(kids).tolist()) == list(range(30))
+    assert len(children(Z, np.array([5]))) == 1
     f = pd.DataFrame({"batch": np.repeat([f"b{i}" for i in range(15)], 6), "condition": "E5", "sample": np.tile([0, 0, 0, 1, 1, 1], 15)})
-    same = np.tile([1, 2, 3], 30)
-    observed, baseline = stability(f, same, 5, rng)
+    observed, baseline = stability(f, np.tile([1, 2, 3], 30), 5, rng)
     assert observed == 1.0 and baseline == 1.0                      # every call names all three: trivial agreement at a coarse cut
-    fine = np.arange(1, 91)
-    observed, baseline = stability(f, fine, 5, rng)
+    observed, baseline = stability(f, np.arange(1, 91), 5, rng)
     assert observed == 0.0 and baseline == 0.0                      # every feature its own cluster: no agreement at all
     half = np.where(np.tile([0, 0, 0, 1, 1, 1], 15) == 0, np.tile([1, 2, 3], 30), np.tile([1, 2, 9], 30))
     observed, baseline = stability(f, half, 5, rng)
@@ -90,25 +99,38 @@ def test_curve_knee_and_stability():
 
 
 def test_parsers():
-    assert parse_polarities(json.dumps({"polarities": [{"index": 1, "polarity": "absence"}, {"index": 2, "polarity": "presence"}]}), 2) == {1: "absence", 2: "presence"}
-    assert parse_polarities(json.dumps({"polarities": [{"index": 1, "polarity": "absence"}]}), 2) is None and parse_polarities("x", 1) is None
-    assert parse_name(json.dumps({"name": "n", "definition": "d", "coherent": False, "note": "two things"})) == {"name": "n", "definition": "d", "coherent": False, "note": "two things"}
-    assert parse_name(json.dumps({"name": "", "definition": "d", "coherent": True})) is None
+    good = {"name": "n", "definition": "d", "criterion": "c", "part": "stem", "coherent": False, "sub_characteristics": ["x", ""]}
+    assert parse_name(json.dumps(good)) == {"name": "n", "definition": "d", "criterion": "c", "part": "stem", "coherent": False, "sub_characteristics": ["x"]}
+    assert parse_name(json.dumps(good | {"part": "elsewhere"})) is None and parse_name(json.dumps(good | {"name": ""})) is None and parse_name("x") is None
+    items = {"items": [{"name": "a", "definition": "d", "criterion": "c", "part": "stem", "sources": ["c1", "c2", "zz"]},
+                       {"name": "b", "definition": "d", "criterion": "c", "part": "options", "sources": ["c2", "c3"]}]}
+    got = parse_checklist(json.dumps(items), ["c1", "c2", "c3", "c4"], 0.75)
+    assert [it["sources"] for it in got] == [["c1", "c2"], ["c3"]]      # unknown leaf dropped, a leaf kept with its first item
+    assert parse_checklist(json.dumps(items), ["c1", "c2", "c3", "c4"], 0.9) is None   # c4 unassigned: below the coverage required
 
 
 def test_run_canon_with_a_fake_engine(tmp_path):
     features = fake_features()
-    params = CanonParams(k_max=10, k_grid=[2, 3, 6, 10], stability_shuffles=3, polarity_batch=7, members_shown=5)
+    params = CanonParams(k=4, min_split=2, stability_shuffles=3, members_shown=5)
     engine = Engine()
     result = run_canon(CONFIG, params, features, tmp_path, engine=engine, progress=lambda s: None)
     assert engine.texts[0].startswith("lexical overlap between stem and key: Variant") and len(engine.texts) == 24
-    assert result.cuts["elbow"] == 3 and result.cuts["stability"] == 3 and result.cuts["named"] == [3]
-    assert result.features.polarity.tolist().count("absence") == 4 and set(result.features.polarity) == {"presence", "absence"}
-    c = result.clusters[3]
-    assert len(c) == 3 and c.coherent.all() and set(c.name) == set(GROUPS) and c["size"].tolist() == [8, 8, 8]
-    assert abs(c.set_index("name").loc[GROUPS[0], "absence_share"] - 0.5) < 1e-9
-    m = result.mappings[3]
-    assert m.canonical.str.match(r"k3-\d{3}[+-]").all() and m.canonical.nunique() == 4      # three clusters, one of them split by polarity
+    assert result.summary["k"] == 4 and len(result.leaves) == 4 and result.leaves.coherent.all()
+    assert len(result.checklist) == 3 and {it["name"] for it in result.checklist} == set(GROUPS)       # the two polarities of family 0 merged
+    merged = next(it for it in result.checklist if it["name"] == GROUPS[0])
+    assert len(merged["sources"]) == 2 and merged["size"] == 8
+    assert result.mapping.canonical.str.match(r"f\d{2}").all() and result.mapping.canonical.nunique() == 3
+    assert (result.features.item == result.features.leaf.map({s: it["id"] for it in result.checklist for s in it["sources"]})).all()
     assert (tmp_path / "embeddings.npy").exists() and (tmp_path / "linkage.npy").exists()
-    again = run_canon(CONFIG, params, features, tmp_path, engine=engine, progress=lambda s: None)   # the embeddings come from the cache
-    assert again.cuts == result.cuts
+    again = run_canon(CONFIG, params, features, tmp_path, engine=engine, progress=lambda s: None)   # embeddings and calls come from the cache
+    assert again.summary["checklist"] == result.summary["checklist"]   # (call caching is the backend's, tested in test_llm)
+
+
+def test_split_of_an_incoherent_cluster(tmp_path):
+    features = fake_features()
+    params = CanonParams(k=3, min_split=2, stability_shuffles=3, members_shown=5)
+    engine = Engine(incoherent={GROUPS[0]})           # the cluster holding both polarities of family 0 is answered as incoherent
+    result = run_canon(CONFIG, params, features, tmp_path, engine=engine, progress=lambda s: None)
+    assert result.summary["clusters"]["split"] == 1 and len(result.leaves) == 4
+    assert sorted(result.leaves.leaf[result.leaves.cluster != result.leaves.leaf].str.len()) == [4, 4]   # two children c<k>.1 and c<k>.2
+    assert len(result.checklist) == 3 and {it["name"] for it in result.checklist} == set(GROUPS)
