@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from qscorer.config import PredictParams
-from qscorer.predict import apply, evaluate, fit
+from qscorer.predict import apply, evaluate, feature_table, fit
 
 ITEMS = [{"id": f"f{i:02d}", "name": f"item {i}", "definition": "d", "criterion": "c", "part": "stem"} for i in range(1, 9)]
 
@@ -26,13 +26,22 @@ def synthetic(n=240, seed=0, shift=0.0):
 def test_fit_apply_and_evaluate(tmp_path):
     scores, slopes = synthetic()
     params = PredictParams(alphas=[0.1, 1.0, 10.0, 100.0])
-    r = fit(scores, slopes, ITEMS, params, {"model": "fake", "thinking": "low", "temperature": 1.0, "samples": 1, "backend": "fake", "context": "c", "system": "s"}, "synthetic")
+    claimed = pd.Series({"f01": 0.9, "f02": 0.8})
+    r = fit(scores, slopes, ITEMS, params, {"model": "fake", "thinking": "low", "temperature": 1.0, "samples": 1, "backend": "fake", "context": "c", "system": "s"}, "synthetic", claimed, boot=100)
     coef = r.model["coefficients"]
+    ft = feature_table(r.model)
+    assert ft.id.tolist()[0] == "f01" and ft.id.tolist()[-1] == "f02" and ft.direction.tolist()[0] == "more learning" and ft.direction.tolist()[-1] == "less learning"
+    assert ft.set_index("id").sign_stability[["f01", "f02"]].min() > 0.95 and ft.sign_stability.between(0, 1).all()
+    assert ft.set_index("id").claimed_good_share["f01"] == 0.9 and pd.isna(ft.set_index("id").claimed_good_share["f03"])
     assert coef["f01"] > 0.25 and coef["f02"] < -0.2 and all(abs(coef[f"f{i:02d}"]) < 0.12 for i in range(3, 9))
     assert r.evaluation["cross_validated"]["cv_within_sets_spearman"] > 0.6 and r.evaluation["cross_validated"]["cv_auc_high_vs_low"] > 0.8
     assert len(r.cv) == 4 and r.model["alpha"] in params.alphas
     pred = apply(r.model, scores)
     assert np.allclose(pred.predicted_slope, r.predictions.predicted_slope) and set(pred["class"]) == {"higher", "lower"}
+    both = pred[(scores.f01 == 1) & (scores.f02 == 1)].iloc[0]
+    assert both.raising.startswith("f01 item 1 (+0.") and both.lowering.startswith("f02 item 2 (-0.")
+    none = pred[(scores[[it["id"] for it in ITEMS]].sum(axis=1) == 0)]
+    assert len(none) == 0 or (none.raising == "").all()
     assert abs(pred.predicted_slope.mean() - np.average(slopes.slope, weights=1 / slopes.slope_sd ** 2)) < 0.05   # the pooled scale
     model = json.loads(json.dumps(r.model))                                      # serialisable
     test_scores, test_slopes = synthetic(seed=1, shift=0.5)

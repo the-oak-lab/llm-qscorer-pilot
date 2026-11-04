@@ -8,7 +8,6 @@ results/
 legacy/
 AGENTS.md
 docs/*
-!docs/logs.md
 
 # TeX & LaTeX Build Artifacts
 *.log

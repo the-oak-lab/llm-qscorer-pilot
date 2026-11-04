@@ -2,8 +2,9 @@
 
 Run:  uv run python scripts/run_predict.py --dataset spacing-exp4 [--presence DIR] [--checklist FILE] [--test spacing-exp3 --test-presence DIR]
           [--baseline DIR] [--out results] [--tag NAME]
-Out:  results/<dataset>/predict[-tag]/model.json (what scripts/predict_questions.py needs), coefficients.csv, predictions.csv (the training
-      questions), cv.csv (one row per penalty), evaluation.json (cross-validated and in-sample, the Stage 1 baseline for comparison when
+Out:  results/<dataset>/predict[-tag]/model.json (what scripts/predict_questions.py needs), features.csv (coefficient, direction, sign
+      stability, prevalence and the claimed direction per item), predictions.csv (the training questions, with the features raising and
+      lowering each prediction), cv.csv (one row per penalty), evaluation.json (cross-validated and in-sample, the Stage 1 baseline for comparison when
       given, and the held-out test when given)
 """
 import argparse
@@ -13,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from qscorer.config import PredictParams, load_dataset_config
-from qscorer.predict import evaluate, fit
+from qscorer.predict import evaluate, feature_table, fit
 
 
 def main():
@@ -37,7 +38,12 @@ def main():
     psum = json.load(open(presence / "summary.json"))
     scoring = {k: psum["params"][k] for k in ("model", "thinking", "temperature", "samples", "backend")} | {"context": config.prompt.context, "system": config.prompt.system}
     params = PredictParams()
-    result = fit(scores, slopes, checklist, params, scoring, config.name)
+    canon = root / "canon" / "features.csv"
+    claimed = None
+    if canon.exists():
+        raw = pd.read_csv(canon)
+        claimed = raw.assign(good=raw.condition.isin(["E1", "E3", "E5", "E7", "E9"])).groupby("item").good.mean()
+    result = fit(scores, slopes, checklist, params, scoring, config.name, claimed)
     evaluation = {"training": result.evaluation}
     baseline = Path(args.baseline) if args.baseline else root / "baseline"
     if (baseline / "evaluation.json").exists():
@@ -50,8 +56,8 @@ def main():
     out = root / ("predict" + (f"-{args.tag}" if args.tag else "")); out.mkdir(parents=True, exist_ok=True)
     with open(out / "model.json", "w") as f:
         json.dump(result.model, f, indent=2)
-    coef = pd.DataFrame(result.model["items"]).assign(coefficient=lambda t: t.id.map(result.model["coefficients"]), prevalence=lambda t: t.id.map(result.evaluation["score_prevalence"]))
-    coef.sort_values("coefficient").to_csv(out / "coefficients.csv", index=False)
+    coef = feature_table(result.model)
+    coef.to_csv(out / "features.csv", index=False)
     result.predictions.to_csv(out / "predictions.csv", index=False)
     result.cv.to_csv(out / "cv.csv", index=False)
     with open(out / "evaluation.json", "w") as f:
@@ -65,7 +71,7 @@ def main():
         t = evaluation["test"]
         print(f"  held-out {t['dataset']}: {t['questions']} questions, Spearman {t['spearman']:.3f} {t.get('spearman_ci')}, within sets {t['within_sets_weighted']:.3f}, AUC {t['auc_high_vs_low']}")
     pd.set_option("display.width", 200); pd.set_option("display.max_colwidth", 70)
-    print(coef.sort_values("coefficient")[["id", "coefficient", "prevalence", "name"]].round(3).to_string(index=False))
+    print(coef[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "name"]].round(3).to_string(index=False))
     print(f"  wrote {out}/")
 
 

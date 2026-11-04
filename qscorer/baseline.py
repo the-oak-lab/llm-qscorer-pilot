@@ -2,8 +2,9 @@
 
 Each question is shown alone (stem, four options, correct answer, feedback, and the dataset's
 context sentence) and Gemini is asked, in separate calls, the design's question (how many of 100
-students will improve in accuracy on it with practice) and the question that carried signal in the
-idea-22 project (how many of 100 students already know the answer before practice). Each question is asked `samples` times per prompt with different seeds; the answer comes
+students will improve in accuracy on it with practice) and a second question that carried signal in
+earlier work (how many of 100 students already know the answer before practice). Each question is
+asked `samples` times per prompt with different seeds; the answer comes
 back as JSON (`reason`, `answer`), and the thought summary and token counts of every call are
 kept. A question's **rating** is the mean answer for `improve` and 100 minus the mean answer for
 `known`, so that a higher rating always means more predicted learning.
