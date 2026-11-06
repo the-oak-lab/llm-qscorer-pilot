@@ -35,7 +35,7 @@ from qscorer.config import PredictParams
 class FitResult:
     model: dict                 # everything `apply` needs, serialisable
     evaluation: dict
-    predictions: pd.DataFrame   # the training questions with their predictions
+    predictions: pd.DataFrame   # the training questions with their in-sample and leave-one-set-out predictions
     cv: pd.DataFrame            # one row per penalty tried
 
 
@@ -92,13 +92,14 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
     w = 1 / np.maximum(t.slope_sd.to_numpy(float), 1e-6) ** 2; w = w / w.mean()
     lab = labels(t, params).to_numpy()
     Xc, yc = demean_within(X, sets), demean_within(y[:, None], sets)[:, 0]
-    rows = []
+    rows, held_out = [], {}
     for alpha in params.alphas:
         pred = np.full(len(y), np.nan)
         for s in np.unique(sets):
             train, test = sets != s, sets == s
             beta = ridge(demean_within(X[train], sets[train]), demean_within(y[train][:, None], sets[train])[:, 0], w[train], alpha)
             pred[test] = X[test] @ beta
+        held_out[alpha] = pred
         e = correlations(pred, y, sets, lab)
         rows.append({"alpha": alpha, "cv_within_sets_spearman": e["within_sets_weighted"], "cv_auc_high_vs_low": e["auc_high_vs_low"]})
     cv = pd.DataFrame(rows)
@@ -126,7 +127,9 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
              "features": sorted(features, key=lambda f: -f["coefficient"]),
              "training_predictions": sorted(float(v) for v in fitted), "training_slope_quantiles": [float(np.quantile(y, q)) for q in (0.1, 0.25, 0.5, 0.75, 0.9)],
              "params": params.model_dump(mode="json")}
-    predictions = apply(model, scores[scores.id.isin(t.index)]).merge(t[["set", "slope", "slope_sd", "p_positive"]].reset_index(), on="id")
+    # cv_predicted_slope: each question's prediction from the model fitted without its item set; it has no intercept, so compare it within a set
+    t = t.assign(cv_predicted_slope=held_out[best])
+    predictions = apply(model, scores[scores.id.isin(t.index)]).merge(t[["set", "slope", "slope_sd", "p_positive", "cv_predicted_slope"]].reset_index(), on="id")
     return FitResult(model, evaluation, predictions, cv)
 
 

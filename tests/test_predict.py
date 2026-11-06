@@ -36,6 +36,9 @@ def test_fit_apply_and_evaluate(tmp_path):
     assert coef["f01"] > 0.25 and coef["f02"] < -0.2 and all(abs(coef[f"f{i:02d}"]) < 0.12 for i in range(3, 9))
     assert r.evaluation["cross_validated"]["cv_within_sets_spearman"] > 0.6 and r.evaluation["cross_validated"]["cv_auc_high_vs_low"] > 0.8
     assert len(r.cv) == 4 and r.model["alpha"] in params.alphas
+    cvp = r.predictions
+    within = np.mean([pd.Series(g.cv_predicted_slope).corr(g.slope, method="spearman") * len(g) for _, g in cvp.groupby("set")]) * 4 / len(cvp)
+    assert abs(within - r.evaluation["cross_validated"]["cv_within_sets_spearman"]) < 1e-9   # the held-out column is what CV scored
     pred = apply(r.model, scores)
     assert np.allclose(pred.predicted_slope, r.predictions.predicted_slope) and set(pred["class"]) == {"higher", "lower"}
     both = pred[(scores.f01 == 1) & (scores.f02 == 1)].iloc[0]
