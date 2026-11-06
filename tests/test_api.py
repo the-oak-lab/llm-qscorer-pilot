@@ -21,9 +21,9 @@ def question(i):
 
 
 class Engine:
-    """Every feature present for even questions, absent for odd ones; q-fail always errors."""
-    def __init__(self, item_ids):
-        self.item_ids = item_ids
+    """Every feature present for even questions, absent for odd ones; q-fail always errors. Records the model each call asked for."""
+    def __init__(self, item_ids, model):
+        self.item_ids, self.model = item_ids, model
 
     def describe(self):
         return {"backend": "fake"}
@@ -36,7 +36,7 @@ class Engine:
                 r = raw(j.id, error="HTTPStatusError: 500")
             else:
                 present = int(qid[1:]) % 2 == 0
-                r = raw(j.id, text=json.dumps({"features": [{"id": i, "present": present} for i in self.item_ids]}))
+                r = raw(j.id, text=json.dumps({"features": [{"id": i, "present": present} for i in self.item_ids]})) | {"model": self.model}
             with open(log, "a") as f:
                 f.write(json.dumps(r) + "\n")
             if accept(r):
@@ -47,7 +47,7 @@ class Engine:
 @pytest.fixture(scope="module")
 def client():
     item_ids = [it["id"] for it in json.loads(MODEL.read_text())["items"]]
-    return TestClient(create_app(MODEL, TOKEN, engine_factory=lambda params: Engine(item_ids)))
+    return TestClient(create_app(MODEL, TOKEN, engine_factory=lambda params: Engine(item_ids, params.model)))
 
 
 def test_auth(client):
@@ -68,6 +68,7 @@ def test_validation(client):
     assert post({"questions": [question(0) | {"answerKey": "z"}]}) == 422
     assert post({"questions": [question(0)], "samples": 4}) == 422
     assert post({"questions": [question(0)], "unknown": 1}) == 422
+    assert post({"questions": [question(0)], "scorer": "gpt"}) == 422
 
 
 def test_predict(client):
@@ -78,6 +79,8 @@ def test_predict(client):
     assert [p["id"] for p in out["predictions"]] == [f"q{i}" for i in range(MAX_QUESTIONS - 1)]
     assert out["failed"] == [{"id": "q-fail", "error": "HTTPStatusError: 500"}]
     assert out["calls"] == 2 * MAX_QUESTIONS
+    assert out["scorer"] == "gemini-flash" and out["scoring_model"] == "google/gemini-3.8-flash"
+    assert out["served_by"] == {"google/gemini-3.8-flash": 2 * (MAX_QUESTIONS - 1)}
     even, odd = out["predictions"][0], out["predictions"][1]
     assert even["calls_answered"] == 2 and set(even["scores"].values()) == {1.0}
     assert set(odd["scores"].values()) == {0.0} and odd["raising"] == [] and odd["lowering"] == []
@@ -100,3 +103,9 @@ def test_schemas_are_current():
         path = ROOT / "schemas" / f"{name}.schema.json"
         assert json.loads(path.read_text()) == s, f"{path} is stale: run python scripts/export_api_schemas.py"
 
+
+def test_scorer_jev(client):
+    r = client.post("/predict", json={"questions": [question(0)], "scorer": "jev"}, headers=AUTH)
+    assert r.status_code == 200
+    out = r.json()
+    assert out["scorer"] == "jev" and out["scoring_model"] == "typesafe/jev-router" and out["served_by"] == {"typesafe/jev-router": 1}

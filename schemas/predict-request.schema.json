@@ -119,6 +119,16 @@
       "default": null,
       "description": "the sentence that tells the model how the questions are used (default: the training dataset's)",
       "title": "Context"
+    },
+    "scorer": {
+      "default": "gemini-flash",
+      "description": "the model that scores the questions; the regression was fitted on gemini-flash scores",
+      "enum": [
+        "gemini-flash",
+        "jev"
+      ],
+      "title": "Scorer",
+      "type": "string"
     }
   },
   "required": [

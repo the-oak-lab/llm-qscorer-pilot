@@ -124,10 +124,28 @@
       "title": "Model",
       "type": "string"
     },
+    "scorer": {
+      "description": "the scorer named in the request",
+      "title": "Scorer",
+      "type": "string"
+    },
     "scoring_model": {
-      "description": "the LLM that scored the questions",
+      "description": "the OpenRouter model id called",
       "title": "Scoring Model",
       "type": "string"
+    },
+    "served_by": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "answered calls by the model that served them, as OpenRouter reports it (a router forwards to other models)",
+      "title": "Served By",
+      "type": "object"
+    },
+    "cost": {
+      "description": "total cost in USD that OpenRouter reported for the calls",
+      "title": "Cost",
+      "type": "number"
     },
     "predictions": {
       "description": "one per question that was scored, in request order",
@@ -159,7 +177,10 @@
   },
   "required": [
     "model",
+    "scorer",
     "scoring_model",
+    "served_by",
+    "cost",
     "predictions",
     "failed",
     "calls",

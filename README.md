@@ -58,6 +58,7 @@ Every endpoint except `GET /health` requires the header `Authorization: Bearer <
 
 - `POST /predict` takes `{"questions": [...], "samples": 1, "context": "..."}`. The questions use the format above. `samples` (1 to 3) and `context` are optional. All calls of a batch run in parallel, so a request takes about 30 seconds.
 - `GET /features` returns the 45 features with their coefficients.
+- `scorer` in the `/predict` body selects the model that scores the questions: `gemini-flash` (the default, `google/gemini-3.8-flash`) or `jev` (`typesafe/jev-router`). The regression was fitted on Gemini Flash scores. The response field `served_by` counts the models that answered the calls.
 - `GET /docs` shows the interactive OpenAPI page.
 
 A question with no usable scoring call goes in `failed`, and the others still get predictions. The server returns 502 when no question can be scored. The JSON Schema files for the request and the responses are in `schemas/`. Run `python scripts/export_api_schemas.py` after changing the shapes in `qscorer/api.py`.
@@ -66,6 +67,14 @@ A question with no usable scoring call goes in `failed`, and the others still ge
 curl -s localhost:8000/predict -H "Authorization: Bearer $QSCORER_API_TOKEN" -H "Content-Type: application/json" \
   -d '{"questions": [{"id": "q2", "question": {"stem": "A 2 kg cart is pushed with a net force of 6 N. What is its acceleration?", "choices": [{"label": "a", "text": "3 m/s^2"}, {"label": "b", "text": "12 m/s^2"}]}, "answerKey": "a", "feedback-text": "a = F / m = 3 m/s^2."}]}'
 ```
+
+## Compare scorers
+
+```
+python scripts/compare_scorers.py --questions bank.jsonl --out compare-jev --n 100
+```
+
+The script draws 100 questions from the file and scores them with `gemini-flash` and `jev`. Then it compares the two scorers feature by feature (agreement and Cohen's kappa) and in their predictions (Spearman correlation of the predicted slopes, share in the same class, gap in percentile). The results go to `summary.json`, `questions.csv` and `features.csv` in the `--out` folder. A second run sends only the missing calls.
 
 ## Interpret results
 
