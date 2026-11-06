@@ -43,6 +43,30 @@ python scripts/predict_questions.py --model models/spacing-exp4/model.json --que
 
 `--model` is the fitted predictor shipped in the repository, `--questions` your file, `--out` a folder for the results. One call scores one question, takes about half a minute and costs about a cent; calls run 16 at a time. If the run is interrupted, running the same command again continues where it stopped. Two optional settings: `--samples 2` scores each question twice and averages the scores; `--context "..."` replaces the sentence that tells the model how the questions are used (the default describes weekly practice sessions with feedback after each answer).
 
+## Run the HTTP API
+
+The API scores up to 20 questions in one request and returns the predictions as JSON. Install the extra dependencies and start the server:
+
+```
+pip install -e ".[api]"
+QSCORER_API_TOKEN=choose-a-long-random-token uvicorn qscorer.api:app --host 0.0.0.0 --port 8000
+```
+
+The server reads `OPENROUTER_API_KEY` from the environment or `.env`, as the script does. `QSCORER_MODEL` selects another `model.json`.
+
+Every endpoint except `GET /health` requires the header `Authorization: Bearer <token>`.
+
+- `POST /predict` takes `{"questions": [...], "samples": 1, "context": "..."}`. The questions use the format above. `samples` (1 to 3) and `context` are optional. All calls of a batch run in parallel, so a request takes about 30 seconds.
+- `GET /features` returns the 45 features with their coefficients.
+- `GET /docs` shows the interactive OpenAPI page.
+
+A question with no usable scoring call goes in `failed`, and the others still get predictions. The server returns 502 when no question can be scored. The JSON Schema files for the request and the responses are in `schemas/`. Run `python scripts/export_api_schemas.py` after changing the shapes in `qscorer/api.py`.
+
+```
+curl -s localhost:8000/predict -H "Authorization: Bearer $QSCORER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"questions": [{"id": "q2", "question": {"stem": "A 2 kg cart is pushed with a net force of 6 N. What is its acceleration?", "choices": [{"label": "a", "text": "3 m/s^2"}, {"label": "b", "text": "12 m/s^2"}]}, "answerKey": "a", "feedback-text": "a = F / m = 3 m/s^2."}]}'
+```
+
 ## Interpret results
 
 `my-predictions/predictions.csv` has one row per question:
