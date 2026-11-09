@@ -43,6 +43,49 @@ python scripts/predict_questions.py --model models/spacing-exp4/model.json --que
 
 `--model` is the fitted predictor shipped in the repository, `--questions` your file, `--out` a folder for the results. One call scores one question, takes about half a minute and costs about a cent; calls run 16 at a time. If the run is interrupted, running the same command again continues where it stopped. Two optional settings: `--samples 2` scores each question twice and averages the scores; `--context "..."` replaces the sentence that tells the model how the questions are used (the default describes weekly practice sessions with feedback after each answer).
 
+## Run the HTTP API
+
+The API scores up to 20 questions in one request and returns the predictions as JSON. Install the extra dependencies and start the server:
+
+```
+pip install -e ".[api]"
+QSCORER_API_TOKEN=choose-a-long-random-token uvicorn qscorer.api:app --host 0.0.0.0 --port 8000
+```
+
+The server reads `OPENROUTER_API_KEY` from the environment or `.env`, as the script does. `QSCORER_MODEL` selects another `model.json`.
+
+Every endpoint except `GET /health` requires the header `Authorization: Bearer <token>`.
+
+- `POST /predict` takes `{"questions": [...], "samples": 1, "context": "..."}`. The questions use the format above. `samples` (1 to 3) and `context` are optional. All calls of a batch run in parallel, so a request takes about 30 seconds.
+- `GET /features` returns the 45 features with their coefficients.
+- `scorer` in the `/predict` body selects the model that scores the questions: `gemini-flash` (the default, `google/gemini-3.8-flash`) or `jev` (TypeSafe's System One model `typesafe/jev-1.14`, through OpenRouter's decisions endpoint; `samples` does not apply). The regression was fitted on Gemini Flash scores. With `jev`, the API sends the tuned Jev request and maps the probabilities to Gemini's answers with `configs/jev-calibration-gemini.json`. The response field `served_by` counts the model versions that answered the calls.
+- `GET /docs` shows the interactive OpenAPI page.
+
+A question with no usable scoring call goes in `failed`, and the others still get predictions. The server returns 502 when no question can be scored. The JSON Schema files for the request and the responses are in `schemas/`. Run `python scripts/export_api_schemas.py` after changing the shapes in `qscorer/api.py`.
+
+```
+curl -s localhost:8000/predict -H "Authorization: Bearer $QSCORER_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"questions": [{"id": "q2", "question": {"stem": "A 2 kg cart is pushed with a net force of 6 N. What is its acceleration?", "choices": [{"label": "a", "text": "3 m/s^2"}, {"label": "b", "text": "12 m/s^2"}]}, "answerKey": "a", "feedback-text": "a = F / m = 3 m/s^2."}]}'
+```
+
+## Compare scorers
+
+```
+python scripts/compare_scorers.py --questions bank.jsonl --out compare-jev --n 100
+```
+
+The script draws 100 questions from the file and scores them with the `--reference` scorer (default `gemini-flash`) and the `--candidate` scorer (default `jev`, or `haiku`). Then it compares the two scorers feature by feature (agreement and Cohen's kappa) and in their predictions (Spearman correlation of the predicted slopes, share in the same class, gap in percentile). The results go to `summary.json`, `questions.csv` and `features.csv` in the `--out` folder. A second run sends only the missing calls.
+
+## Jev
+
+`models/jev-exp4/README.md` describes how Jev scores the checklist and how its own slope model was fitted. It also gives the comparison with the researchers' Gemini predictions. These scripts reproduce the numbers:
+
+- `scripts/nsfv4/extract_questions.py` and `scripts/nsfv4/to_interim.py` turn the DataShop export into questions and a transaction file for `scripts/run_slopes.py`.
+- `scripts/tune_jev.py` fits per-feature thresholds and the split-or-joined choice against LLM runs. `scripts/test_jev_phrasings.py` tests rewordings of features.
+- `scripts/holdout_table.py` compares the scorers with Gemini on the holdout questions.
+- `scripts/fit_jev_model.py` scores the researchers' 341 questions with Jev and writes `models/jev-exp4`.
+- `scripts/compare_researchers.py` compares the held-out predictions with the researchers' slopes. `scripts/fit_by_scorer.py` fits one model per scorer.
+
 ## Interpret results
 
 `my-predictions/predictions.csv` has one row per question:

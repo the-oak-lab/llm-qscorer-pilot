@@ -1,0 +1,239 @@
+{
+  "_about": "Per-feature Jev scoring fitted by scripts/tune_jev.py on a `split` run against the share of LLM runs saying present. form: joined (the full criterion) or split (OR of the parts in configs/jev-splits.json); mode: threshold (present when the probability is at least `threshold`) or probability (sigmoid(a * logit(p) + b)).",
+  "fitted_on": {
+    "jev_run": "jev-tuned",
+    "llm_runs": [
+      "gemini-flash",
+      "gemini-flash-seed1"
+    ],
+    "questions": 100
+  },
+  "features": {
+    "f01": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.9
+    },
+    "f02": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f03": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.85
+    },
+    "f04": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f05": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f06": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f07": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.5
+    },
+    "f08": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.5
+    },
+    "f09": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f10": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f11": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f12": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f13": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f14": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.715266205598173,
+      "b": -3.0924409385383567
+    },
+    "f15": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f16": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f17": {
+      "form": "split",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f18": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f19": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f20": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f21": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f22": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f23": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f24": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.9
+    },
+    "f25": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.6
+    },
+    "f26": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.9
+    },
+    "f27": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f28": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f29": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f30": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.6
+    },
+    "f31": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f32": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f33": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.85
+    },
+    "f34": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f35": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f36": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.5
+    },
+    "f37": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f38": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f39": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f40": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f41": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f42": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f43": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f44": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.3
+    },
+    "f45": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    }
+  }
+}

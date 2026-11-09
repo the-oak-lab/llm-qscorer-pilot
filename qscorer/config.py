@@ -159,6 +159,7 @@ class PresenceParams(BaseModel):
     passes: int = Field(3, ge=1)
     limit: int | None = Field(None, ge=1, description="score only this many questions, spread over the item sets (pilots)")
     seed: int = 0
+    call_seed: int = Field(0, ge=0, description="the seed of a question's first call; call k uses call_seed + k. Change it for an independent repeat run")
 
 
 class PredictParams(BaseModel):

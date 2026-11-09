@@ -54,7 +54,7 @@ def build_prompt(q: dict, checklist: list[dict], context: str) -> str:
 
 def build_jobs(questions: dict[str, dict], ids: list[str], checklist: list[dict], context: str, system: str, params: PresenceParams) -> list[Job]:
     return [Job(f"{qid}|{k}", build_prompt(questions[qid], checklist, context), system=system, schema=SCHEMA, temperature=params.temperature,
-                seed=k, max_output_tokens=params.max_output_tokens, thinking=params.thinking, thoughts=params.thoughts)
+                seed=params.call_seed + k, max_output_tokens=params.max_output_tokens, thinking=params.thinking, thoughts=params.thoughts)
             for qid in ids for k in range(params.samples)]
 
 

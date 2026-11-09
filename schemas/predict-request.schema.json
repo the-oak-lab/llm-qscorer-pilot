@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "predict-request.schema.json",
+  "$defs": {
+    "Choice": {
+      "additionalProperties": true,
+      "properties": {
+        "label": {
+          "description": "the option's label, e.g. a",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "description": "the option's text",
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "text"
+      ],
+      "title": "Choice",
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": true,
+      "description": "One question in the KCluster format plus `feedback-text`. Other fields are allowed and ignored.",
+      "properties": {
+        "id": {
+          "description": "a unique id for the question",
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "question": {
+          "$ref": "#/$defs/Stem"
+        },
+        "answerKey": {
+          "description": "the label of the correct option",
+          "minLength": 1,
+          "title": "Answerkey",
+          "type": "string"
+        },
+        "feedback-text": {
+          "default": "",
+          "description": "the feedback students see after answering",
+          "title": "Feedback-Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "answerKey"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "Stem": {
+      "additionalProperties": true,
+      "properties": {
+        "stem": {
+          "description": "the question stem",
+          "minLength": 1,
+          "title": "Stem",
+          "type": "string"
+        },
+        "choices": {
+          "description": "the answer options",
+          "items": {
+            "$ref": "#/$defs/Choice"
+          },
+          "minItems": 2,
+          "title": "Choices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "stem",
+        "choices"
+      ],
+      "title": "Stem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "questions": {
+      "description": "1 to 20 questions",
+      "items": {
+        "$ref": "#/$defs/Question"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Questions",
+      "type": "array"
+    },
+    "samples": {
+      "default": 1,
+      "description": "scoring calls per question; a feature's score is the share of calls that found it present",
+      "maximum": 3,
+      "minimum": 1,
+      "title": "Samples",
+      "type": "integer"
+    },
+    "context": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "the sentence that tells the model how the questions are used (default: the training dataset's)",
+      "title": "Context"
+    },
+    "scorer": {
+      "default": "gemini-flash",
+      "description": "the model that scores the questions: gemini-flash (an LLM, the scorer the regression was fitted on), haiku (Claude Haiku 5.5, same prompt) or jev (TypeSafe's System One model, the `tuned` variant calibrated to Gemini; samples is ignored)",
+      "enum": [
+        "gemini-flash",
+        "haiku",
+        "jev"
+      ],
+      "title": "Scorer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "questions"
+  ],
+  "title": "PredictRequest",
+  "type": "object"
+}

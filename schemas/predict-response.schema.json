@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "predict-response.schema.json",
+  "$defs": {
+    "Contribution": {
+      "properties": {
+        "feature": {
+          "description": "the feature id, e.g. f07",
+          "title": "Feature",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "contribution": {
+          "description": "score times coefficient, in the units of predicted_slope",
+          "title": "Contribution",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "name",
+        "contribution"
+      ],
+      "title": "Contribution",
+      "type": "object"
+    },
+    "Failure": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "error": {
+          "description": "the last error of the question's scoring calls",
+          "title": "Error",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "error"
+      ],
+      "title": "Failure",
+      "type": "object"
+    },
+    "Prediction": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "predicted_slope": {
+          "description": "predicted gain in accuracy with practice, in logits per log-attempt (training median about 0.24)",
+          "title": "Predicted Slope",
+          "type": "number"
+        },
+        "percentile": {
+          "description": "share of the training questions with a lower prediction",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Percentile",
+          "type": "number"
+        },
+        "class": {
+          "description": "higher or lower than the training median",
+          "enum": [
+            "higher",
+            "lower"
+          ],
+          "title": "Class",
+          "type": "string"
+        },
+        "calls_answered": {
+          "description": "scoring calls that returned a usable answer",
+          "minimum": 1,
+          "title": "Calls Answered",
+          "type": "integer"
+        },
+        "raising": {
+          "description": "features present that raised the prediction, largest first",
+          "items": {
+            "$ref": "#/$defs/Contribution"
+          },
+          "title": "Raising",
+          "type": "array"
+        },
+        "lowering": {
+          "description": "features present that lowered the prediction, largest first",
+          "items": {
+            "$ref": "#/$defs/Contribution"
+          },
+          "title": "Lowering",
+          "type": "array"
+        },
+        "scores": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "the score on each checklist feature, 0 to 1",
+          "title": "Scores",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "predicted_slope",
+        "percentile",
+        "class",
+        "calls_answered",
+        "raising",
+        "lowering",
+        "scores"
+      ],
+      "title": "Prediction",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "model": {
+      "description": "the dataset the predictor was trained on",
+      "title": "Model",
+      "type": "string"
+    },
+    "scorer": {
+      "description": "the scorer named in the request",
+      "title": "Scorer",
+      "type": "string"
+    },
+    "scoring_model": {
+      "description": "the OpenRouter model id called",
+      "title": "Scoring Model",
+      "type": "string"
+    },
+    "served_by": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "answered calls by the model version that served them, as OpenRouter reports it",
+      "title": "Served By",
+      "type": "object"
+    },
+    "cost": {
+      "description": "total cost in USD that OpenRouter reported for the calls",
+      "title": "Cost",
+      "type": "number"
+    },
+    "predictions": {
+      "description": "one per question that was scored, in request order",
+      "items": {
+        "$ref": "#/$defs/Prediction"
+      },
+      "title": "Predictions",
+      "type": "array"
+    },
+    "failed": {
+      "description": "questions with no usable scoring call",
+      "items": {
+        "$ref": "#/$defs/Failure"
+      },
+      "title": "Failed",
+      "type": "array"
+    },
+    "calls": {
+      "title": "Calls",
+      "type": "integer"
+    },
+    "tokens": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "title": "Tokens",
+      "type": "object"
+    }
+  },
+  "required": [
+    "model",
+    "scorer",
+    "scoring_model",
+    "served_by",
+    "cost",
+    "predictions",
+    "failed",
+    "calls",
+    "tokens"
+  ],
+  "title": "PredictResponse",
+  "type": "object"
+}

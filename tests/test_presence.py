@@ -57,3 +57,10 @@ def test_run_presence(tmp_path):
     a = result.summary["agreement"]
     assert a["f01"]["agreement"] == 1.0 and a["f01"]["kappa"] == 1.0 and a["f02"]["agreement"] == 0.0
     assert result.example.startswith("model: ") and (tmp_path / "responses.jsonl").exists()
+
+
+def test_call_seed():
+    from qscorer.presence import build_jobs
+    q = {"q1": question(1, True)}
+    assert [j.seed for j in build_jobs(q, ["q1"], CHECKLIST, "C.", "S.", PresenceParams(samples=2))] == [0, 1]
+    assert [j.seed for j in build_jobs(q, ["q1"], CHECKLIST, "C.", "S.", PresenceParams(samples=2, call_seed=5))] == [5, 6]
