@@ -1,0 +1,48 @@
+{
+  "_about": "Compound checklist criteria split into separate Jev Noul questions for the `split` variant (qscorer/jev.py). Each part is a statement that is true when that part is present. The feature's split score is the logical OR of its parts: the maximum part probability, which is at or above a threshold exactly when any part is. The joined question is still sent in the same request, so one run gives both readings. Only disjunctions of different conditions are split. Lists of synonyms or examples of one thing (e.g. f01 'data, constants, or conversion values', f16 'such as ...') stay joined, and so do conjunctions (f14, f19), which an OR cannot recombine.",
+  "f05": [
+    "The item contains specific numerical values that let students reach the answer by a test-taking shortcut or invite computational slips, rather than requiring conceptual derivation.",
+    "The item requires a unit conversion that invites computational slips rather than testing conceptual derivation.",
+    "The answer options follow a numerical or structural pattern that lets students pick the answer by a test-taking heuristic."
+  ],
+  "f17": [
+    "The item explicitly specifies the boundaries, parameters, or conditions of the system it describes.",
+    "The item conflates a colloquial word with a technical term, using everyday language where the technical meaning differs."
+  ],
+  "f18": [
+    "The correct answer option is noticeably longer than every distractor.",
+    "The correct answer option contains more detail or more qualifying clauses than every distractor."
+  ],
+  "f24": [
+    "At least one distractor makes a claim that directly conflicts with information stated in the stem.",
+    "At least one distractor contains statements that are incompatible with each other.",
+    "At least one distractor is trivially implausible."
+  ],
+  "f26": [
+    "Two or more distractors are formed by permuting or swapping attributes of the correct choice.",
+    "Two or more distractors are mirror-image reversals of the correct choice."
+  ],
+  "f27": [
+    "Distinctive terminology or phrasing in the stem directly matches the correct option, so the option can be picked without conceptual derivation.",
+    "An explicit definition in the stem directly cues the correct option, so the option can be picked without conceptual derivation."
+  ],
+  "f31": [
+    "The feedback explicitly states an overarching rule that generalizes beyond this question.",
+    "The feedback explicitly explains the causal mechanism behind the answer.",
+    "The feedback demonstrates the complete step-by-step derivation needed to reach the answer."
+  ],
+  "f32": [
+    "The feedback states an abstract, generalizable rule or principle that does not depend on the details of this question.",
+    "The feedback explicitly identifies a common error and cautions against it."
+  ],
+  "f38": [
+    "The feedback broadens the explanation to overarching rules of the domain.",
+    "The feedback explains downstream consequences beyond the answer itself.",
+    "The feedback explicitly clarifies why certain factors do not apply."
+  ],
+  "f42": [
+    "The feedback directly contradicts a premise established in the stem or options.",
+    "The feedback substantively qualifies a premise established in the stem or options.",
+    "The feedback uses terminology that does not match the terminology of the stem or options."
+  ]
+}

@@ -21,9 +21,10 @@ def question(i):
 
 
 class Engine:
-    """Every feature present for even questions, absent for odd ones; q-fail always errors. Records the model each call asked for."""
-    def __init__(self, item_ids, model):
-        self.item_ids, self.model = item_ids, model
+    """Every feature present for even questions, absent for odd ones; q-fail always errors. Answers in the shape of the
+    scorer's endpoint (chat completions for gemini-flash, decisions for jev) and records the model asked for."""
+    def __init__(self, item_ids, scorer, model):
+        self.item_ids, self.scorer, self.model = item_ids, scorer, model
 
     def describe(self):
         return {"backend": "fake"}
@@ -36,7 +37,11 @@ class Engine:
                 r = raw(j.id, error="HTTPStatusError: 500")
             else:
                 present = int(qid[1:]) % 2 == 0
-                r = raw(j.id, text=json.dumps({"features": [{"id": i, "present": present} for i in self.item_ids]})) | {"model": self.model}
+                if self.scorer == "jev":
+                    r = {"id": j.id, "model": self.model + "-20261014", "usage": {"input_tokens": 500, "output_tokens": 40, "cost": 2e-5},
+                         "answers": {i: {"type": "noul", "noul": 0.9 if present else 0.1} for i in json.loads(j.prompt)["questions"]}}
+                else:
+                    r = raw(j.id, text=json.dumps({"features": [{"id": i, "present": present} for i in self.item_ids]})) | {"model": self.model}
             with open(log, "a") as f:
                 f.write(json.dumps(r) + "\n")
             if accept(r):
@@ -47,7 +52,7 @@ class Engine:
 @pytest.fixture(scope="module")
 def client():
     item_ids = [it["id"] for it in json.loads(MODEL.read_text())["items"]]
-    return TestClient(create_app(MODEL, TOKEN, engine_factory=lambda params: Engine(item_ids, params.model)))
+    return TestClient(create_app(MODEL, TOKEN, engine_factory=lambda scorer, model: Engine(item_ids, scorer, model)))
 
 
 def test_auth(client):
@@ -108,4 +113,8 @@ def test_scorer_jev(client):
     r = client.post("/predict", json={"questions": [question(0)], "scorer": "jev"}, headers=AUTH)
     assert r.status_code == 200
     out = r.json()
-    assert out["scorer"] == "jev" and out["scoring_model"] == "typesafe/jev-router" and out["served_by"] == {"typesafe/jev-router": 1}
+    assert out["scorer"] == "jev" and out["scoring_model"] == "typesafe/jev-1.14" and out["served_by"] == {"typesafe/jev-1.14-20261014": 1}
+    p = out["predictions"][0]
+    # the tuned variant: every probability 0.9, then the Gemini calibration (thresholds at most 0.9 mark it present)
+    assert p["calls_answered"] == 1 and out["cost"] == 2e-5 and all(0 <= v <= 1 for v in p["scores"].values())
+    assert sum(v == 1.0 for v in p["scores"].values()) >= 40

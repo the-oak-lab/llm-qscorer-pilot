@@ -1,0 +1,34 @@
+{
+  "_about": "Alternative Jev wordings for features where Jev's ranking diverges from Gemini's reading (scripts/test_jev_phrasings.py). Every variant of every feature goes in the same request per question, with two controls: `def` (the current statement with the definition as criteria, the tuned form) and `stmt` (the current statement alone). Variants are instruction-only statements that are true when the feature is present. `_chosen` lists the wordings the `tuned` variant sends in place of the current one (f16 keeps its current wording: its gain was weak and its AUC dropped).",
+  "f11": {
+    "v1": "The question sentence names the kind of answer it asks for, such as an explanation, a comparison, a prediction, a classification, an energy transformation, or a definition.",
+    "v2": "The question sentence tells the student what kind of reasoning the answer must show (for example 'Which statement best explains...', 'Which correctly compares...', 'Which type of ... is this?', 'What will happen...').",
+    "v3": "The final question in the stem asks for a specific kind of judgment about the situation, rather than only asking for a fact, a number, or a term."
+  },
+  "f22": {
+    "v1": "Each answer choice combines two or more separate answers in one option, such as a pair of items, a list of values, or two claims joined by 'and' or a semicolon. A single claim followed by its reason does not count.",
+    "v2": "Every answer choice is made of several parts that must each be checked separately, such as two paired entities, two separate values, or a sequence of steps.",
+    "v3": "The answer choices are bundles: each one states two or more independent things at once, not one claim with an explanation of it."
+  },
+  "f27": {
+    "v1": "A distinctive word or phrase from the stem appears again in the correct option but not in the other options.",
+    "v2": "The correct option repeats wording from the stem that the distractors do not repeat, so matching words points to the answer.",
+    "v3": "A student could pick the correct option by matching a key term from the stem to the same term in that option, without understanding the concept."
+  },
+  "f19": {
+    "v1": "All answer options use the same sentence structure and have about the same length and number of parts; no option stands out.",
+    "v2": "The answer options are built in parallel: each has the same grammatical form and the same number of elements.",
+    "v3": "No answer option is noticeably longer, shorter, more complex, or differently structured than the others."
+  },
+  "f16": {
+    "v1": "The stem presents a statement, rule, or claim and asks which option supports, applies, or evaluates it.",
+    "v2": "The question uses a special format, such as judging someone's claim, applying a rule that the stem names, or matching a pair of reverse processes, instead of asking directly for a fact or an outcome.",
+    "v3": "The stem explicitly names a governing rule or law, or quotes an assertion, and the task is framed around it."
+  },
+  "_chosen": {
+    "f11": "v2",
+    "f19": "v3",
+    "f22": "v2",
+    "f27": "v3"
+  }
+}

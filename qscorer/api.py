@@ -24,11 +24,9 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from qscorer.config import PresenceParams
-from qscorer.llm import ROOT, Backend, make_backend
+from qscorer.llm import ROOT, Backend
 from qscorer.predict import apply
-from qscorer.presence import run_presence
-from qscorer.scorers import DEFAULT_SCORER, SCORERS, presence_params, read_log
+from qscorer.scorers import DEFAULT_SCORER, SCORERS, read_log, score
 
 MAX_QUESTIONS = 20
 MAX_SAMPLES = 3
@@ -72,7 +70,7 @@ class PredictRequest(BaseModel):
     questions: list[Question] = Field(min_length=1, max_length=MAX_QUESTIONS, description=f"1 to {MAX_QUESTIONS} questions")
     samples: int = Field(1, ge=1, le=MAX_SAMPLES, description="scoring calls per question; a feature's score is the share of calls that found it present")
     context: str | None = Field(None, min_length=1, description="the sentence that tells the model how the questions are used (default: the training dataset's)")
-    scorer: Literal[tuple(SCORERS)] = Field(DEFAULT_SCORER, description="the model that scores the questions; the regression was fitted on gemini-flash scores")
+    scorer: Literal[tuple(SCORERS)] = Field(DEFAULT_SCORER, description="the model that scores the questions: gemini-flash (an LLM, the scorer the regression was fitted on), haiku (Claude Haiku 5.5, same prompt) or jev (TypeSafe's System One model, the `tuned` variant calibrated to Gemini; samples is ignored)")
 
     @model_validator(mode="after")
     def ids_are_unique(self) -> PredictRequest:
@@ -110,7 +108,7 @@ class PredictResponse(BaseModel):
     model: str = Field(description="the dataset the predictor was trained on")
     scorer: str = Field(description="the scorer named in the request")
     scoring_model: str = Field(description="the OpenRouter model id called")
-    served_by: dict[str, int] = Field(description="answered calls by the model that served them, as OpenRouter reports it (a router forwards to other models)")
+    served_by: dict[str, int] = Field(description="answered calls by the model version that served them, as OpenRouter reports it")
     cost: float = Field(description="total cost in USD that OpenRouter reported for the calls")
     predictions: list[Prediction] = Field(description="one per question that was scored, in request order")
     failed: list[Failure] = Field(description="questions with no usable scoring call")
@@ -136,15 +134,13 @@ def contributions(model: dict, scores: dict[str, float], sign: int) -> list[Cont
 
 
 def create_app(model_path: Path | None = None, token: str | None = None,
-               engine_factory: Callable[[PresenceParams], Backend] | None = None) -> FastAPI:
+               engine_factory: Callable[[str, str], Backend] | None = None) -> FastAPI:
     token = token or os.environ.get("QSCORER_API_TOKEN")
     if not token:
         raise RuntimeError("set QSCORER_API_TOKEN")
     model_path = Path(model_path or os.environ.get("QSCORER_MODEL") or DEFAULT_MODEL)
     model = json.loads(model_path.read_text())
-    scoring = model["scoring"]
     item_ids = [it["id"] for it in model["items"]]
-    engine_factory = engine_factory or make_backend
 
     bearer = HTTPBearer(auto_error=False)
 
@@ -166,10 +162,9 @@ def create_app(model_path: Path | None = None, token: str | None = None,
     @app.post("/predict", dependencies=[Depends(authorize)], response_model=PredictResponse, response_model_by_alias=True)
     def predict(req: PredictRequest) -> PredictResponse:
         questions = {q.id: q.model_dump(by_alias=True) for q in req.questions}
-        params = presence_params(scoring, req.scorer, samples=req.samples, concurrency=MAX_QUESTIONS * req.samples)
         with tempfile.TemporaryDirectory(prefix="qscorer-") as tmp:
-            result = run_presence(questions, list(questions), model["items"], req.context or scoring["context"], scoring["system"],
-                                  params, Path(tmp), engine=engine_factory(params), progress=lambda s: None)
+            result = score(req.scorer, questions, list(questions), model, req.context, Path(tmp), samples=req.samples,
+                           concurrency=MAX_QUESTIONS * req.samples, jev_variant="tuned", engine_factory=engine_factory, progress=lambda s: None)
             errors, served, cost = read_log(Path(tmp) / "responses.jsonl")
         scored = result.scores
         predictions: list[Prediction] = []
@@ -189,7 +184,7 @@ def create_app(model_path: Path | None = None, token: str | None = None,
         failed = [Failure(id=qid, error=errors.get(qid, "no usable answer")) for qid in questions if qid not in done]
         if not predictions:
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, {"message": "no question could be scored", "failed": [f.model_dump() for f in failed]})
-        return PredictResponse(model=model["dataset"], scorer=req.scorer, scoring_model=params.model, served_by=dict(served),
+        return PredictResponse(model=model["dataset"], scorer=req.scorer, scoring_model=SCORERS[req.scorer], served_by=dict(served),
                                cost=round(cost, 6), predictions=predictions, failed=failed,
                                calls=result.summary["calls"], tokens=result.summary["tokens"])
 

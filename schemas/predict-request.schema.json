@@ -122,9 +122,10 @@
     },
     "scorer": {
       "default": "gemini-flash",
-      "description": "the model that scores the questions; the regression was fitted on gemini-flash scores",
+      "description": "the model that scores the questions: gemini-flash (an LLM, the scorer the regression was fitted on), haiku (Claude Haiku 5.5, same prompt) or jev (TypeSafe's System One model, the `tuned` variant calibrated to Gemini; samples is ignored)",
       "enum": [
         "gemini-flash",
+        "haiku",
         "jev"
       ],
       "title": "Scorer",

@@ -138,7 +138,7 @@
       "additionalProperties": {
         "type": "integer"
       },
-      "description": "answered calls by the model that served them, as OpenRouter reports it (a router forwards to other models)",
+      "description": "answered calls by the model version that served them, as OpenRouter reports it",
       "title": "Served By",
       "type": "object"
     },

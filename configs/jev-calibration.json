@@ -1,0 +1,257 @@
+{
+  "_about": "Per-feature Jev scoring fitted by scripts/tune_jev.py on a `split` run against the share of LLM runs saying present. form: joined (the full criterion) or split (OR of the parts in configs/jev-splits.json); mode: threshold (present when the probability is at least `threshold`) or probability (sigmoid(a * logit(p) + b)).",
+  "fitted_on": {
+    "jev_run": "jev-split",
+    "llm_runs": [
+      "gemini-flash",
+      "gemini-flash-seed1",
+      "haiku",
+      "haiku-seed1"
+    ],
+    "questions": 100
+  },
+  "features": {
+    "f01": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.9
+    },
+    "f02": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.8950100521495397,
+      "b": -2.2450125266214593
+    },
+    "f03": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.85
+    },
+    "f04": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f05": {
+      "form": "split",
+      "mode": "probability",
+      "a": 1.9803877918731574,
+      "b": -5.231873557283754
+    },
+    "f06": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f07": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f08": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.5
+    },
+    "f09": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f10": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.5
+    },
+    "f11": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.9499210745184268,
+      "b": 2.3647933832788124
+    },
+    "f12": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.547868052102067,
+      "b": -3.6383530037453307
+    },
+    "f13": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f14": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.6699227745047691,
+      "b": -0.6868172632006212
+    },
+    "f15": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.85
+    },
+    "f16": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.65
+    },
+    "f17": {
+      "form": "split",
+      "mode": "probability",
+      "a": 2.119506933433429,
+      "b": -2.236782999596501
+    },
+    "f18": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.6
+    },
+    "f19": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.3
+    },
+    "f20": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f21": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.040966282443151,
+      "b": -2.2669307138000883
+    },
+    "f22": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.3967557617308188,
+      "b": -2.3584148312173077
+    },
+    "f23": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f24": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 0.9398268052186776,
+      "b": -0.6229665677094993
+    },
+    "f25": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f26": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.7125116491871228,
+      "b": -2.6048168586581344
+    },
+    "f27": {
+      "form": "split",
+      "mode": "threshold",
+      "threshold": 0.6
+    },
+    "f28": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f29": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f30": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f31": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f32": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.55
+    },
+    "f33": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.9
+    },
+    "f34": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.0741152337762143,
+      "b": -0.8078869826816195
+    },
+    "f35": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.8
+    },
+    "f36": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.0896430973526585,
+      "b": -1.3791145654393002
+    },
+    "f37": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.75
+    },
+    "f38": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.064850467735773,
+      "b": -2.321572401793632
+    },
+    "f39": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f40": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.706595884318281,
+      "b": -3.3109900691105203
+    },
+    "f41": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.1191809961173262,
+      "b": -0.49779362421912254
+    },
+    "f42": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    },
+    "f43": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 1.7901362853473242,
+      "b": -1.4835899988034311
+    },
+    "f44": {
+      "form": "joined",
+      "mode": "probability",
+      "a": 2.8668974444428104,
+      "b": 1.2596530399286756
+    },
+    "f45": {
+      "form": "joined",
+      "mode": "threshold",
+      "threshold": 0.7
+    }
+  }
+}

@@ -3,7 +3,8 @@
 The reference scorer (`a`, normally gemini-flash) is the one the regression was trained on. A question counts only when both
 scorers answered it. Feature agreement is measured on the scores (0 or 1 with one sample per question), with Cohen's kappa
 for the agreement beyond chance. Prediction agreement is the correlation of the predicted slopes, the share of questions in
-the same class, and the gap in percentile.
+the same class, the gap in percentile, and the overlap of the lowest-ranked questions (the ones a screen for unlearnable
+questions removes): of the reference's bottom 10, 20 and 25 percent, how many the candidate also ranks there.
 """
 from __future__ import annotations
 
@@ -20,6 +21,16 @@ def kappa(a: np.ndarray, b: np.ndarray) -> float | None:
     po = float((a == b).mean())
     pe = float(a.mean() * b.mean() + (1 - a.mean()) * (1 - b.mean()))
     return None if pe >= 1 else (po - pe) / (1 - pe)
+
+
+def bottom_overlap(ref: pd.Series, cand: pd.Series, fractions=(0.10, 0.20, 0.25)) -> dict:
+    """For each fraction: questions in both bottom sets, the set size, and the count expected by chance."""
+    out = {}
+    for frac in fractions:
+        k = round(frac * len(ref))
+        both = len(set(ref.nsmallest(k).index) & set(cand.nsmallest(k).index)) if k else 0
+        out[f"{int(round(frac * 100))}%"] = {"both": both, "of": k, "chance": round(k * k / len(ref), 1) if len(ref) else None}
+    return out
 
 
 def compare(model: dict, scores_a: pd.DataFrame, scores_b: pd.DataFrame, a: str = "a", b: str = "b") -> tuple[pd.DataFrame, pd.DataFrame, dict]:
@@ -72,6 +83,7 @@ def compare(model: dict, scores_a: pd.DataFrame, scores_b: pd.DataFrame, a: str 
             "mean_slope_gap": float(questions.slope_gap.mean()) if len(ids) else None,
             "mean_abs_percentile_gap": float((pa.percentile - pb.percentile).abs().mean()) if len(ids) else None,
             "training_slope_sd": float(np.std(model["training_predictions"])),
+            "bottom_overlap": bottom_overlap(pa.predicted_slope, pb.predicted_slope),
         },
         "features": {
             "mean_agreement": float(features.agreement.mean()) if len(ids) else None,
