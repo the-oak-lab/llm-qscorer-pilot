@@ -18,7 +18,7 @@ scored together (`relative`, which matches the within-set ordering the model was
 but needs a batch and moves when the batch changes). The flaws are the checklist
 items present in it (scored at least `flaw_present`) that Gemini consistently claimed harm improvement. The list of
 flaws does not depend on the model that scores the questions; only the score at which a flaw counts as present does
-(half the calls for Gemini, a probability of 0.7 for Jev). An item is a flaw when at
+(half the calls for Gemini, a mean probability of 0.7 for Jev). An item is a flaw when at
 least `flaw_share` of Gemini's claims about it say so (`claimed_good_share` from
 `scripts/run_direction.py` at most 1 - `flaw_share`) and those claims come from at least
 `flaw_min_batches` discovery batches. The flaws come from Gemini's claims, not from the coefficients, and the

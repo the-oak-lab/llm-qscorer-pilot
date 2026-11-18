@@ -65,7 +65,7 @@ python scripts/predict_questions.py --questions my-questions.jsonl --out my-pred
 
 The file can hold any number of questions. A single question works with the default cutoff; `--cutoff relative` needs at least 4 (see [Choosing the cutoff](#choosing-the-cutoff)).
 
-One call scores one question, and calls run 16 at a time. A Gemini call takes about half a minute and costs about a cent. A Jev call takes under a second and costs a small fraction of a cent. If a run is interrupted, run the same command again: it reuses the calls already made and continues.
+Gemini is called once per question by default. Jev is called three times per question and its three answers are averaged, because a repeated Jev call gives slightly different answers; the Jev predictor was fitted on such averages. Calls run 16 at a time. A Gemini call takes about half a minute and costs about a cent. A Jev call takes under a second and costs a small fraction of a cent. If a run is interrupted, run the same command again: it reuses the calls already made and continues.
 
 | option | meaning |
 |---|---|
@@ -75,7 +75,7 @@ One call scores one question, and calls run 16 at a time. A Gemini call takes ab
 | `--api` | `openrouter` (the default, needs `OPENROUTER_API_KEY`) or `direct`: the model's own API, Google's (needs `GEMINI_API_KEY`) or TypeSafe's (needs `TYPESAFE_API_KEY`) |
 | `--model` | the fitted predictor; by default the one that ships for the backend, `models/spacing-exp4/model.json` for Gemini and `models/spacing-exp4-jev/model.json` for Jev. A predictor fitted on one model's scores is refused with the other model. |
 | `--cutoff` | `fixed` (the default) or `relative`; how the label is decided |
-| `--samples` | Gemini only: calls per question (default 1); with 2, each question is scored twice and the scores averaged, which costs twice as much. Jev is asked once. |
+| `--samples` | calls per question, averaged; by default 1 for Gemini and 3 for Jev. With Gemini at 2, each question is scored twice and the scores averaged, which costs twice as much. |
 | `--context` | the sentence that tells the model how the questions are used; the default describes science classes with a pretest and practice sessions spread over several weeks, with feedback after each answer |
 | `--concurrency` | calls run at the same time (default 16) |
 
@@ -86,7 +86,7 @@ One call scores one question, and calls run 16 at a time. A Gemini call takes ab
 | column | meaning |
 |---|---|
 | `id` | the question's id |
-| `predicted_slope` | the predicted gain in accuracy with practice, in logits of accuracy per log-attempt, on the scale of the training data; the predictions for the training questions ranged from 0.00 to 0.48 with Gemini and from −0.06 to 0.46 with Jev, with a median of 0.22 for both |
+| `predicted_slope` | the predicted gain in accuracy with practice, in logits of accuracy per log-attempt, on the scale of the training data; the predictions for the training questions ranged from 0.00 to 0.48 with Gemini and from −0.07 to 0.46 with Jev, with a median of 0.22 for both |
 | `label` | `low improvement expected` when `predicted_slope` is below the cutoff, `improvement expected` otherwise |
 | `flaws` | the flaws found in the question, each as id and name, separated by `; `; empty when there are none |
 
@@ -99,7 +99,7 @@ mcq-36475,0.302,improvement expected,f18 Correct-Option Length and Elaboration A
 mcq-36539,0.209,improvement expected,f05 Numerical and Structural Cueing Artifacts
 ```
 
-The folder also holds `summary.json` (the model used, the number of calls, tokens, and the cutoff used), `scores.csv` (each question's score on all 45 checklist features: the share of calls that found it present with Gemini, the probability that it is present with Jev), `scores-by-call.csv`, and `responses.jsonl` (the raw calls, which let a rerun continue).
+The folder also holds `summary.json` (the model used, the number of calls, tokens, and the cutoff used), `scores.csv` (each question's score on all 45 checklist features: the share of calls that found it present with Gemini, the mean of the calls' probabilities that it is present with Jev), `scores-by-call.csv`, and `responses.jsonl` (the raw calls, which let a rerun continue).
 
 ### Choosing the cutoff
 
@@ -126,7 +126,7 @@ A flaw is a checklist feature that Gemini consistently judged harmful to improve
 | f43 | feedback | Extraneous Conceptual Content in Feedback | the feedback brings in ideas the question does not need |
 | f45 | feedback | Factual or Conceptual Inaccuracy in Item or Feedback | the question or the feedback contains a factual or scientific error |
 
-The list is the same whichever model scores the question, because it comes from the claims made when the checklist was built, not from the scoring. What differs is how a flaw is found in a question. With Gemini, a flaw is present when at least half the calls say so. With Jev, it is present when Jev's probability that it is present is at least 0.7. The two models agree only moderately on which questions have which flaws. Jev almost never reports f45, so with Jev an empty `flaws` column does not mean the question was checked for factual errors.
+The list is the same whichever model scores the question, because it comes from the claims made when the checklist was built, not from the scoring. What differs is how a flaw is found in a question. With Gemini, a flaw is present when at least half the calls say so. With Jev, it is present when the mean of Jev's probabilities that it is present is at least 0.7. The two models agree only moderately on which questions have which flaws. Jev almost never reports f45, so with Jev an empty `flaws` column does not mean the question was checked for factual errors.
 
 The full checklist, with each feature's definition, its weight in the regression and whether it counts as a flaw, is in `models/spacing-exp4/features.csv` (Gemini) and `models/spacing-exp4-jev/features.csv` (Jev).
 
@@ -137,9 +137,9 @@ Both models score the same checklist, and each regression was fitted on the same
 | | Gemini | Jev |
 |---|---|---|
 | training data, leaving out one question bank at a time | 0.23 | 0.18 |
-| second dataset | 0.12 | 0.23 to 0.27 (two runs) |
+| second dataset | 0.12 | 0.25 (single calls instead of three: 0.23 to 0.27) |
 | second dataset: share of low-learning questions in the bottom quarter of each bank (14% overall) | 16% | 25% |
-| the same questions scored twice: correlation of the two runs' predictions | 0.74 | 0.98 |
+| the same questions scored twice: correlation of the two runs' predictions | 0.74 | 0.995 (single calls: 0.98) |
 | time per question | about 30 seconds | under a second |
 | cost per question | about a cent | a small fraction of a cent |
 
@@ -151,4 +151,4 @@ Jev ranks questions a little worse on the data it was fitted on and better on th
 - **`low improvement expected` means less than most questions, not none.** With Gemini every training prediction is above zero; with Jev a few are slightly below.
 - **The predictions measure improvement on the same question, not understanding.** The training data tested students again on the questions they practised.
 - **Much of the signal is one cue.** A correct option longer than the others (f18) has the largest weight in both regressions. The length of the correct option divided by the average length of the others, measured without any model, correlates with observed learning about as well as either model: 0.26 on the training data and 0.22 on the second dataset.
-- **The label is only partly validated on new questions.** On a second dataset, Gemini's predictions correlated with observed learning at 0.12, and its label did not pick out low-learning questions better than chance. Jev's correlated at 0.23 to 0.27, and a quarter of the questions it put in the bottom quarter were low-learning, against 14% overall (see [Choosing Gemini or Jev](#choosing-gemini-or-jev)). Treat the label as a screen to check against student data, not as a verdict on any one question.
+- **The label is only partly validated on new questions.** On a second dataset, Gemini's predictions correlated with observed learning at 0.12, and its label did not pick out low-learning questions better than chance. Jev's correlated at 0.25, and a quarter of the questions it put in the bottom quarter were low-learning, against 14% overall (see [Choosing Gemini or Jev](#choosing-gemini-or-jev)). Treat the label as a screen to check against student data, not as a verdict on any one question.

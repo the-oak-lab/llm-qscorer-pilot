@@ -4,7 +4,7 @@ Run:  uv run python scripts/run_predict.py --dataset spacing-exp4 [--presence DI
           [--baseline DIR] [--out results] [--tag NAME]
       The Jev model: --presence results/spacing-exp4/presence-jev --test spacing-exp3 --test-presence results/spacing-exp3/presence-jev --tag jev
 In:   the Stage 3.2 scores (Gemini's from scripts/run_presence.py or Jev's from scripts/run_presence_jev.py; the model records which, and Jev's
-      flaws count as present at a probability of 0.7), the Stage 0 slopes, the checklist, and results/<dataset>/canon/direction-items.csv (from
+      flaws count as present at a mean probability of 0.7), the Stage 0 slopes, the checklist, and results/<dataset>/canon/direction-items.csv (from
       scripts/run_direction.py: the direction Gemini claimed for each item and the batches behind it, which decide the flaws for either model)
 Out:  results/<dataset>/predict[-tag]/model.json (what scripts/predict_questions.py needs), features.csv (coefficient, direction, sign
       stability, prevalence, the claimed direction and the flaw flag per item), predictions.csv (the training questions with their
@@ -43,7 +43,8 @@ def main():
     p = json.load(open(presence / "summary.json"))["params"]
     engine = p.get("engine", "gemini")
     if engine == "jev":
-        scoring = {"engine": "jev", "model": p["model"], "api": p["api"], "rewordings": p["rewordings"], "context": config.prompt.context}
+        scoring = {"engine": "jev", "model": p["model"], "api": p["api"], "samples": p.get("samples", 1), "rewordings": p["rewordings"],
+                   "context": config.prompt.context}
         params = PredictParams(flaw_present=PRESENT)
     else:
         scoring = {"engine": "gemini"} | {k: p[k] for k in ("model", "thinking", "temperature", "samples", "backend")} | {"context": config.prompt.context, "system": config.prompt.system}

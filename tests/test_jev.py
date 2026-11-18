@@ -35,6 +35,8 @@ def test_body():
     body = json.loads(build_jobs(Q, ["q1"], CHECKLIST, "Context.", {}, "jev-1.14.0")[0].prompt)
     assert body["model"] == "jev-1.14.0" and list(body["questions"]) == ["f01", "f02"]
     assert body["state"] == {"context": "Context.", "question": "A ball rolls.", "options": {"a": "x", "b": "y"}, "correct_answer": "b", "feedback": "Because."}
+    jobs = build_jobs(Q, list(Q), CHECKLIST, "Context.", {}, "jev-1.14.0", samples=2)
+    assert [j.id for j in jobs] == ["q1|0", "q2|0", "q1|1", "q2|1"] and jobs[0].prompt == jobs[2].prompt   # repeats apart in time, same body
 
 
 def test_model_id():
@@ -61,8 +63,9 @@ class Engine:
     def many(self, jobs, log, passes, accept, progress):
         done = {}
         for j in jobs:
+            k = int(j.id.split("|")[1])   # the repeats of q1 differ a little; q2 always fails
             r = {"id": j.id, "model": "jev-1.14.0", "usage": {"input_tokens": 500, "output_tokens": 40},
-                 "answers": {"f01": {"type": "noul", "noul": 0.8}, "f02": {"type": "noul", "noul": 0.2}}} if j.id.startswith("q1") else {"id": j.id, "error": "HTTP 529"}
+                 "answers": {"f01": {"type": "noul", "noul": [0.8, 0.7, 0.9][k]}, "f02": {"type": "noul", "noul": 0.2}}} if j.id.startswith("q1") else {"id": j.id, "error": "HTTP 529"}
             with open(log, "a") as f:
                 f.write(json.dumps(r) + "\n")
             if accept(r):
@@ -71,18 +74,22 @@ class Engine:
 
 
 def test_run(tmp_path):
-    result = run_jev(Q, list(Q), CHECKLIST, "Context.", {}, tmp_path, engine=Engine(), progress=lambda s: None)
-    assert result.scores.to_dict("records") == [{"id": "q1", "n_ok": 1, "f01": 0.8, "f02": 0.2}]
+    result = run_jev(Q, list(Q), CHECKLIST, "Context.", {}, tmp_path, engine=Engine(), progress=lambda s: None)   # 3 calls per question
+    sc = result.scores.to_dict("records")
+    assert len(sc) == 1 and sc[0]["id"] == "q1" and sc[0]["n_ok"] == 3 and abs(sc[0]["f01"] - 0.8) < 1e-12 and abs(sc[0]["f02"] - 0.2) < 1e-12
     s = result.summary
-    assert s["answered"] == 1 and s["failed"] == 1 and s["tokens"]["prompt_tokens"] == 500 and s["served_by"] == {"jev-1.14.0": 1}
-    assert s["params"]["engine"] == "jev" and s["params"]["model"] == "jev-1.14.0" and s["params"]["present"] == 0.7
-    assert result.samples.set_index("id").loc["q2", "error"] == "HTTP 529"
+    assert s["answered"] == 3 and s["failed"] == 3 and s["tokens"]["prompt_tokens"] == 1500 and s["served_by"] == {"jev-1.14.0": 3}
+    assert s["params"]["engine"] == "jev" and s["params"]["model"] == "jev-1.14.0" and s["params"]["samples"] == 3 and s["params"]["present"] == 0.7
+    assert s["repeat_difference"]["questions"] == 1 and abs(s["repeat_difference"]["mean"] - 0.05) < 1e-12   # |0.8 - 0.7| on f01, 0 on f02
+    assert (result.samples[result.samples.id == "q2"].error == "HTTP 529").all() and len(result.samples) == 6
+    one = run_jev(Q, ["q1"], CHECKLIST, "Context.", {}, tmp_path / "one", samples=1, engine=Engine(), progress=lambda s: None)
+    assert one.scores.f01.tolist() == [0.8] and one.summary["repeat_difference"] is None
 
 
 def test_shipped_model_matches_config():
     """The shipped Jev model asks the rewordings in configs/jev-rewordings.json, and every item gets a question."""
     model = json.load(open(ROOT / "models" / "spacing-exp4-jev" / "model.json"))
-    assert model["scoring"]["engine"] == "jev" and model["scoring"]["rewordings"] == load_rewordings()
+    assert model["scoring"]["engine"] == "jev" and model["scoring"]["rewordings"] == load_rewordings() and model["scoring"]["samples"] == 3
     assert len(questions_for(model["items"], model["scoring"]["rewordings"])) == len(model["items"]) == 45
     assert model["params"]["flaw_present"] == 0.7
     gemini = json.load(open(ROOT / "models" / "spacing-exp4" / "model.json"))

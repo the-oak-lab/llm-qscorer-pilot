@@ -2,15 +2,17 @@
 
 Jev does not generate text. A request gives it the content once (the state: the dataset's context sentence, the stem, the
 options, the correct answer and the feedback) and one yes/no question (a Noul) per checklist item, and Jev answers each with
-the probability that the answer is yes. One request covers the whole checklist. Jev takes no seed or temperature and gives
-nearly the same probabilities when asked again, so a question is asked once.
+the probability that the answer is yes. One request covers the whole checklist. Jev takes no seed or temperature, but the
+same request asked again gives slightly different probabilities (by about 0.01 on average, up to about 0.1), so a question
+is asked `samples` times (`SAMPLES`, 3, by default) and its score on an item is the mean of the probabilities. The repeats
+of a question are sent apart in time: all questions once, then all again.
 
 Each item is asked as its criterion turned into a statement that is true when the item is present ("Count as present when
 the stem includes X" becomes "The stem includes X"), with the item's definition as what yes means. A few items are asked in
 other words (`configs/jev-rewordings.json`), chosen on the `jev` branch (Dallas Hall) where Jev read the statement
-differently from Gemini. An item's **score** is the probability. The slope regression is fitted on Jev's own scores, since
-they do not mean the same as Gemini's share of calls. For the flaws, an item counts as present when its probability is at
-least `PRESENT`, 0.7, the threshold TypeSafe suggests for yes.
+differently from Gemini. An item's **score** is the mean probability. The slope regression is fitted on Jev's own scores, since
+they do not mean the same as Gemini's share of calls. For the flaws, an item counts as present when its mean probability is
+at least `PRESENT`, 0.7, the threshold TypeSafe suggests for yes.
 
 Jev is reached in one of two ways, with the same request and answer: TypeSafe's API (`direct`, TYPESAFE_API_KEY) or
 OpenRouter's decisions endpoint (`openrouter`, OPENROUTER_API_KEY; OpenRouter marks it alpha). The version is pinned.
@@ -29,6 +31,7 @@ from qscorer.llm import ROOT, Backend, Job, api_key
 from qscorer.presence import PresenceResult
 
 PRESENT = 0.7
+SAMPLES = 3
 MODEL = "jev-1.14.0"
 OPENROUTER_IDS = {"jev-1.14.0": "typesafe/jev-1.14"}   # TypeSafe's name of a version -> OpenRouter's
 APIS = {"direct": ("https://api.typesafe.ai/v1/systemone", "TYPESAFE_API_KEY"),
@@ -84,11 +87,13 @@ def state(q: dict, context: str) -> dict:
             "correct_answer": q["answerKey"], "feedback": q.get("feedback-text", "") or ""}
 
 
-def build_jobs(questions: dict[str, dict], ids: list[str], checklist: list[dict], context: str, rewordings: dict[str, str], model: str) -> list[Job]:
-    """One job per question; its prompt is the request body as JSON (Jev takes no prompt)."""
+def build_jobs(questions: dict[str, dict], ids: list[str], checklist: list[dict], context: str, rewordings: dict[str, str], model: str,
+               samples: int = 1) -> list[Job]:
+    """`samples` jobs per question (ids `<question>|<k>`), every question's k-th before any (k+1)-th; a job's prompt is the
+    request body as JSON (Jev takes no prompt)."""
     asked = questions_for(checklist, rewordings)
-    return [Job(f"{qid}|0", json.dumps({"model": model, "state": state(questions[qid], context), "questions": asked}), thinking=None, thoughts=False)
-            for qid in ids]
+    bodies = {qid: json.dumps({"model": model, "state": state(questions[qid], context), "questions": asked}) for qid in ids}
+    return [Job(f"{qid}|{k}", bodies[qid], thinking=None, thoughts=False) for k in range(samples) for qid in ids]
 
 
 def nouls(raw: dict, item_ids: list[str]) -> dict[str, float] | None:
@@ -133,13 +138,14 @@ class Jev(Backend):
 
 
 def run_jev(questions: dict[str, dict], ids: list[str], checklist: list[dict], context: str, rewordings: dict[str, str], out: Path,
-            api: str = "direct", model: str = MODEL, concurrency: int = 16, timeout: float = 60.0, passes: int = 3, engine=None,
-            progress=print) -> PresenceResult:
-    """Score `ids` with Jev; raw log in `out/responses.jsonl`, resumed if present. The result has the shape of `run_presence`'s,
-    with one call per question."""
+            api: str = "direct", model: str = MODEL, samples: int = SAMPLES, concurrency: int = 16, timeout: float = 60.0, passes: int = 3,
+            engine=None, progress=print) -> PresenceResult:
+    """Score `ids` with Jev, `samples` calls per question; raw log in `out/responses.jsonl`, resumed if present (so a run with more
+    samples adds only the new calls). The result has the shape of `run_presence`'s; a score is the mean probability over a
+    question's answered calls."""
     item_ids = [it["id"] for it in checklist]
     engine = engine or Jev(api, model, concurrency=concurrency, timeout=timeout)
-    jobs = build_jobs(questions, ids, checklist, context, rewordings, engine.model)
+    jobs = build_jobs(questions, ids, checklist, context, rewordings, engine.model, samples)
     out.mkdir(parents=True, exist_ok=True)
     log = out / "responses.jsonl"
     records = engine.many(jobs, log, passes, lambda raw: nouls(raw, item_ids) is not None, progress)
@@ -152,15 +158,28 @@ def run_jev(questions: dict[str, dict], ids: list[str], checklist: list[dict], c
         raw = records.get(job.id) or {}
         p = nouls(raw, item_ids) if raw else None
         usage = raw.get("usage") or {}
-        rows.append({"id": job.id.split("|")[0], "sample": 0, "ok": p is not None, **(p or dict.fromkeys(item_ids)), "served_by": raw.get("model"),
+        qid, k = job.id.split("|")
+        rows.append({"id": qid, "sample": int(k), "ok": p is not None, **(p or dict.fromkeys(item_ids)), "served_by": raw.get("model"),
                      "prompt_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"),
                      "error": None if p else errors.get(job.id, "not asked")})
-    samples = pd.DataFrame(rows)
-    ok = samples[samples.ok]
-    scores = ok[["id"] + item_ids].assign(n_ok=1)[["id", "n_ok"] + item_ids].reset_index(drop=True)
-    summary = {"questions_asked": len(ids), "calls": len(jobs), "answered": len(ok), "failed": int((~samples.ok).sum()),
-               "errors": samples.error.dropna().value_counts().head(10).to_dict(), "served_by": ok.served_by.value_counts().to_dict(),
+    calls = pd.DataFrame(rows)
+    ok = calls[calls.ok]
+    g = ok.groupby("id", sort=False)
+    scores = g[item_ids].mean().assign(n_ok=g.size()).reset_index()[["id", "n_ok"] + item_ids]
+    summary = {"questions_asked": len(ids), "calls": len(jobs), "answered": len(ok), "failed": int((~calls.ok).sum()),
+               "errors": calls.error.dropna().value_counts().head(10).to_dict(), "served_by": ok.served_by.value_counts().to_dict(),
                "tokens": {k: int(ok[k].fillna(0).sum()) for k in ("prompt_tokens", "output_tokens")}, "items": len(item_ids),
-               "params": {"engine": "jev", "api": api, "model": engine.model, "rewordings": rewordings, "present": PRESENT},
-               "backend": engine.describe(), "run_at": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
-    return PresenceResult(samples, scores, summary, jobs[0].prompt if jobs else "")
+               "params": {"engine": "jev", "api": api, "model": engine.model, "samples": samples, "rewordings": rewordings, "present": PRESENT},
+               "repeat_difference": repeat_difference(ok, item_ids), "backend": engine.describe(),
+               "run_at": dt.datetime.now().astimezone().isoformat(timespec="seconds")}
+    return PresenceResult(calls, scores, summary, jobs[0].prompt if jobs else "")
+
+
+def repeat_difference(ok: pd.DataFrame, item_ids: list[str]) -> dict | None:
+    """For questions answered by calls 0 and 1: the mean and the largest absolute difference of their probabilities, over all items."""
+    a, b = ok[ok["sample"] == 0].set_index("id"), ok[ok["sample"] == 1].set_index("id")
+    both = a.index.intersection(b.index)
+    if not len(both):
+        return None
+    d = (a.loc[both, item_ids] - b.loc[both, item_ids]).abs().to_numpy()
+    return {"questions": len(both), "mean": float(d.mean()), "max": float(d.max())}

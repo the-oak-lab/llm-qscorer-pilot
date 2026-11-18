@@ -1,17 +1,17 @@
 """Predict learning for new questions: score them against the checklist with Gemini or Jev, apply that model's fitted regression, list their flaws.
 
 Run:  uv run python scripts/predict_questions.py --questions my-questions.jsonl --out my-predictions
-          [--backend gemini|jev] [--api openrouter|direct] [--model FILE] [--cutoff fixed|relative] [--samples 1] [--concurrency 16]
+          [--backend gemini|jev] [--api openrouter|direct] [--model FILE] [--cutoff fixed|relative] [--samples N] [--concurrency 16]
           [--context "..."] [--model-id ID] [--base-url URL]
 In:   a JSONL file, one question per line, in the project's format:
       {"id": "q1", "question": {"stem": "...", "choices": [{"label": "a", "text": "..."}, ...]}, "answerKey": "b", "feedback-text": "..."}
       --backend picks the model that scores the checklist: gemini (the default; models/spacing-exp4/model.json) or jev (TypeSafe's Jev;
       models/spacing-exp4-jev/model.json). Each has its own regression, fitted on its own scores; the checklist and the list of flaws are
       the same. --api picks how the model is reached: openrouter (the default, OPENROUTER_API_KEY) or direct (GEMINI_API_KEY for Gemini,
-      TYPESAFE_API_KEY for Jev).
+      TYPESAFE_API_KEY for Jev). Gemini is called once per question by default; Jev three times, averaged, as its model was fitted.
 Out:  <out>/predictions.csv: id, predicted_slope (logits per log-attempt, the pooled scale of the training data), label ("improvement
       expected", or "low improvement expected" below the cutoff), flaws (the checklist items present that Gemini consistently claimed
-      harm improvement; present means half the calls for Gemini, a probability of at least 0.7 for Jev). The cutoff is the 25th
+      harm improvement; present means half the calls for Gemini, a mean probability of at least 0.7 for Jev). The cutoff is the 25th
       percentile of the training predictions (--cutoff fixed, the default) or of this batch's predictions (--cutoff relative: the bottom
       quarter of the questions in the file; at least 4 questions, and 20 or more for a stable cutoff; adding questions to the file can
       change earlier labels). <out>/scores.csv (the checklist scores), <out>/scores-by-call.csv, <out>/responses.jsonl (raw, resumable),
@@ -44,7 +44,8 @@ def main():
     ap.add_argument("--model", default=None, help="the fitted predictor (default: the one shipped for --backend)")
     ap.add_argument("--cutoff", choices=["fixed", "relative"], default="fixed",
                     help="fixed: below the training predictions' 25th percentile; relative: the bottom quarter of the questions in this file")
-    ap.add_argument("--samples", type=int, default=1, help="gemini only: calls per question; the score is the share saying present")
+    ap.add_argument("--samples", type=int, default=None,
+                    help="calls per question, averaged (default: 1 for gemini, where the score is the share saying present; for jev the 3 its model was fitted with)")
     ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--context", default=None, help="the sentence about how the questions are used (default: the training dataset's)")
     ap.add_argument("--model-id", default=None, help="the model id on the API (default: the version the regression was fitted on)")
@@ -57,8 +58,7 @@ def main():
     engine = scoring.get("engine", "gemini")
     if engine != args.backend:
         raise SystemExit(f"{model_file} was fitted on {engine} scores; use --backend {engine}, or a model fitted on {args.backend} scores")
-    if args.backend == "jev" and args.samples != 1:
-        raise SystemExit("--samples applies to gemini only: Jev is asked once per question")
+    samples = args.samples or (scoring.get("samples", 1) if args.backend == "jev" else 1)
     questions = load_questions(Path(args.questions))
     if args.cutoff == "relative":
         if len(questions) < 4:
@@ -69,12 +69,12 @@ def main():
     context = args.context or scoring["context"]
     if args.backend == "jev":
         result = run_jev(questions, list(questions), model["items"], context, scoring["rewordings"], out, api=args.api,
-                         model=args.model_id or jev_model_id(scoring["model"], args.api), concurrency=args.concurrency)
+                         model=args.model_id or jev_model_id(scoring["model"], args.api), samples=samples, concurrency=args.concurrency)
     else:
         backend = "gemini" if args.api == "direct" else "openrouter"
         model_id = args.model_id or (("google/" + scoring["model"]) if backend == "openrouter" and "/" not in scoring["model"] else scoring["model"])
         params = PresenceParams(backend=backend, base_url=args.base_url, model=model_id, thinking=scoring["thinking"], temperature=scoring["temperature"],
-                                samples=args.samples, concurrency=args.concurrency, max_output_tokens=8192)   # a call uses about 4k; OpenRouter checks the budget against the key's credit
+                                samples=samples, concurrency=args.concurrency, max_output_tokens=8192)   # a call uses about 4k; OpenRouter checks the budget against the key's credit
         result = run_presence(questions, list(questions), model["items"], context, scoring["system"], params, out)
     result.samples.to_csv(out / "scores-by-call.csv", index=False)
     result.scores.to_csv(out / "scores.csv", index=False)
