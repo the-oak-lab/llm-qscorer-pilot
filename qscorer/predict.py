@@ -13,9 +13,10 @@ with no item set gets a slope on the pooled scale.
 A new question's prediction has three parts: the predicted slope; a label, "low improvement
 expected" when the prediction is below a quantile of the training predictions (`label_quantile`,
 default the 25th percentile) and "improvement expected" otherwise; and its flaws, the checklist
-items present in it that Gemini claimed harm improvement. An item is a flaw when at least
-`flaw_share` of Gemini's claims about it say so (`claimed_good_share` from `scripts/run_direction.py`
-at most 1 - `flaw_share`). The flaws come from Gemini's claims, not from the coefficients, and the
+items present in it that Gemini consistently claimed harm improvement. An item is a flaw when at
+least `flaw_share` of Gemini's claims about it say so (`claimed_good_share` from
+`scripts/run_direction.py` at most 1 - `flaw_share`) and those claims come from at least
+`flaw_min_batches` discovery batches. The flaws come from Gemini's claims, not from the coefficients, and the
 two often disagree: a longer correct option is a flaw by Gemini's claims and predicts a steeper
 slope. The model also carries a feature table: each item's coefficient and direction, how stable
 the sign is over bootstrap refits, its prevalence in the training questions, the direction
@@ -85,11 +86,12 @@ def correlations(pred: np.ndarray, slope: np.ndarray, sets: np.ndarray, label: n
 
 
 def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], params: PredictParams, scoring: dict, dataset: str,
-        claimed: pd.Series | None = None, boot: int = 500) -> FitResult:
+        claimed: pd.DataFrame | None = None, boot: int = 500) -> FitResult:
     """`scores`: one row per question (`id`, one column per item id). `slopes`: the Stage 0 table.
     `scoring`: how the scores were produced (model, thinking, temperature, samples, context, system), kept in the model for the tool.
-    `claimed`: per item, the share of Gemini's claims that its presence helps (`claimed_good_share` from scripts/run_direction.py),
-    reported next to the fitted direction; it also decides which items are flaws. The sign of each coefficient is checked over `boot`
+    `claimed`: indexed by item, `claimed_good_share` (the share of Gemini's claims that its presence helps) and `bad_batches` (the
+    discovery batches with a claim that it harms), from scripts/run_direction.py; reported next to the fitted direction, and they
+    decide which items are flaws. The sign of each coefficient is checked over `boot`
     bootstrap refits."""
     item_ids = [it["id"] for it in checklist]
     t = scores.set_index("id")[item_ids].join(slopes.set_index("id")[["set", "slope", "slope_sd", "p_positive"]], how="inner").dropna(subset=["slope"])
@@ -118,11 +120,13 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
         i = rng.integers(0, len(y), len(y))
         b = ridge(demean_within(X[i], sets[i]), demean_within(y[i][:, None], sets[i])[:, 0], w[i], best)
         signs += np.sign(b) == np.sign(beta)
-    good = {i: float(claimed[i]) for i in item_ids if claimed is not None and i in claimed.index and not pd.isna(claimed[i])}
-    flaws = [i for i in item_ids if i in good and good[i] <= 1 - params.flaw_share]
+    c = claimed if claimed is not None else pd.DataFrame(columns=["claimed_good_share", "bad_batches"])
+    good = {i: float(c.at[i, "claimed_good_share"]) for i in item_ids if i in c.index and not pd.isna(c.at[i, "claimed_good_share"])}
+    batches = {i: int(c.at[i, "bad_batches"]) for i in item_ids if i in c.index}
+    flaws = [i for i in item_ids if i in good and good[i] <= 1 - params.flaw_share and batches[i] >= params.flaw_min_batches]
     features = [{"id": it["id"], "name": it["name"], "part": it["part"], "definition": it["definition"], "criterion": it["criterion"],
                  "coefficient": float(b), "direction": "more learning" if b > 0 else "less learning", "sign_stability": float(s_ / boot),
-                 "prevalence": float(X[:, k].mean()), "claimed_good_share": good.get(it["id"]), "flaw": it["id"] in flaws}
+                 "prevalence": float(X[:, k].mean()), "claimed_good_share": good.get(it["id"]), "bad_batches": batches.get(it["id"]), "flaw": it["id"] in flaws}
                 for k, (it, b, s_) in enumerate(zip(checklist, beta, signs))]
     evaluation = {"training_questions": int(len(t)), "sets": {str(s): int((sets == s).sum()) for s in np.unique(sets)}, "alpha": best,
                   "cross_validated": cv[cv.alpha == best].iloc[0].to_dict(),
@@ -157,7 +161,7 @@ def apply(model: dict, scores: pd.DataFrame, present: float = 0.5) -> pd.DataFra
 
 def feature_table(model: dict) -> pd.DataFrame:
     """The model's features, most positive coefficient first."""
-    return pd.DataFrame(model["features"])[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "flaw", "part", "name", "definition", "criterion"]]
+    return pd.DataFrame(model["features"])[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "bad_batches", "flaw", "part", "name", "definition", "criterion"]]
 
 
 def evaluate(model: dict, scores: pd.DataFrame, slopes: pd.DataFrame, params: PredictParams) -> dict:

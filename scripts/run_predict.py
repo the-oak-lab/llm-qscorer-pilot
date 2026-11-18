@@ -3,7 +3,7 @@
 Run:  uv run python scripts/run_predict.py --dataset spacing-exp4 [--presence DIR] [--checklist FILE] [--test spacing-exp3 --test-presence DIR]
           [--baseline DIR] [--out results] [--tag NAME]
 In:   the Stage 3.2 scores, the Stage 0 slopes, the checklist, and results/<dataset>/canon/direction-items.csv (from scripts/run_direction.py:
-      the direction Gemini claimed for each item, which decides the flaws)
+      the direction Gemini claimed for each item and the batches behind it, which decide the flaws)
 Out:  results/<dataset>/predict[-tag]/model.json (what scripts/predict_questions.py needs), features.csv (coefficient, direction, sign
       stability, prevalence, the claimed direction and the flaw flag per item), predictions.csv (the training questions with their
       predicted slope, label and flaws), cv.csv (one row per penalty), evaluation.json (cross-validated and in-sample, the Stage 1 baseline
@@ -43,7 +43,7 @@ def main():
     direction = root / "canon" / "direction-items.csv"
     claimed = None
     if direction.exists():
-        claimed = pd.read_csv(direction).set_index("item").claimed_good_share
+        claimed = pd.read_csv(direction).set_index("item")[["claimed_good_share", "bad_batches"]]
     else:
         print(f"  no {direction}: no claimed direction and no flaws (run scripts/run_direction.py first)")
     result = fit(scores, slopes, checklist, params, scoring, config.name, claimed)
@@ -74,9 +74,9 @@ def main():
         t = evaluation["test"]
         print(f"  held-out {t['dataset']}: {t['questions']} questions, Spearman {t['spearman']:.3f} {t.get('spearman_ci')}, within sets {t['within_sets_weighted']:.3f}, AUC {t['auc_high_vs_low']}")
     pd.set_option("display.width", 200); pd.set_option("display.max_colwidth", 70)
-    print(coef[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "flaw", "name"]].round(3).to_string(index=False))
+    print(coef[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "bad_batches", "flaw", "name"]].round(3).to_string(index=False))
     m = result.model
-    print(f"  label cutoff {m['label_cutoff']:.3f} (training quantile {params.label_quantile}); flaws: {', '.join(m['flaws'])}")
+    print(f"  label cutoff {m['label_cutoff']:.3f} (training quantile {params.label_quantile}); flaws (claimed bad share >= {params.flaw_share}, from >= {params.flaw_min_batches} batches): {', '.join(m['flaws'])}")
     print(f"  wrote {out}/")
 
 

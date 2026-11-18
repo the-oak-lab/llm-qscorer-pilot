@@ -47,4 +47,5 @@ def test_run_direction(tmp_path):
     assert rows.claim.fillna("").tolist() == ["good", "good", "", "bad", "bad", "bad"]
     t = items.set_index("item")
     assert t.claimed_good_share["f01"] == 1.0 and t.claimed_good_share["f02"] == 0.0 and t.neither["f01"] == 1 and t.unjudged.sum() == 0
+    assert t.bad_batches.tolist() == [0, 1]                                    # all three f02 claims come from one batch
     assert summary["answered"] == summary["calls"] == 4

@@ -26,13 +26,14 @@ def synthetic(n=240, seed=0, shift=0.0):
 def test_fit_apply_and_evaluate(tmp_path):
     scores, slopes = synthetic()
     params = PredictParams(alphas=[0.1, 1.0, 10.0, 100.0])
-    claimed = pd.Series({"f01": 0.9, "f02": 0.8, "f04": 0.05, "f05": 0.2})   # f04 a flaw at flaw_share 0.9, f05 not
+    claimed = pd.DataFrame({"claimed_good_share": {"f01": 0.9, "f02": 0.8, "f04": 0.05, "f05": 0.2, "f06": 0.0},
+                            "bad_batches": {"f01": 3, "f02": 5, "f04": 12, "f05": 20, "f06": 4}})   # flaws need share <= 0.1 and >= 10 batches: f04 only
     r = fit(scores, slopes, ITEMS, params, {"model": "fake", "thinking": "low", "temperature": 1.0, "samples": 1, "backend": "fake", "context": "c", "system": "s"}, "synthetic", claimed, boot=100)
     coef = r.model["coefficients"]
     ft = feature_table(r.model)
     assert ft.id.tolist()[0] == "f01" and ft.id.tolist()[-1] == "f02" and ft.direction.tolist()[0] == "more learning" and ft.direction.tolist()[-1] == "less learning"
     assert ft.set_index("id").sign_stability[["f01", "f02"]].min() > 0.95 and ft.sign_stability.between(0, 1).all()
-    assert ft.set_index("id").claimed_good_share["f01"] == 0.9 and pd.isna(ft.set_index("id").claimed_good_share["f03"])
+    assert ft.set_index("id").claimed_good_share["f01"] == 0.9 and pd.isna(ft.set_index("id").claimed_good_share["f03"]) and ft.set_index("id").bad_batches["f06"] == 4
     assert coef["f01"] > 0.25 and coef["f02"] < -0.2 and all(abs(coef[f"f{i:02d}"]) < 0.12 for i in range(3, 9))
     assert r.evaluation["cross_validated"]["cv_within_sets_spearman"] > 0.6 and r.evaluation["cross_validated"]["cv_auc_high_vs_low"] > 0.8
     assert len(r.cv) == 4 and r.model["alpha"] in params.alphas

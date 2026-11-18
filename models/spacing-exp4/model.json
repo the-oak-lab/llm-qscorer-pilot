@@ -1,6 +1,6 @@
 {
   "dataset": "spacing-exp4",
-  "fitted_at": "2026-11-18T11:08:15-05:00",
+  "fitted_at": "2026-11-18T11:59:05-05:00",
   "scoring": {
     "model": "gemini-3.8-flash",
     "thinking": "medium",
@@ -388,6 +388,7 @@
       "sign_stability": 1.0,
       "prevalence": 0.19941348973607037,
       "claimed_good_share": 0.0,
+      "bad_batches": 50,
       "flaw": true
     },
     {
@@ -401,6 +402,7 @@
       "sign_stability": 1.0,
       "prevalence": 0.05278592375366569,
       "claimed_good_share": 0.9818181818181818,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -414,6 +416,7 @@
       "sign_stability": 0.998,
       "prevalence": 0.18181818181818182,
       "claimed_good_share": 0.743801652892562,
+      "bad_batches": 65,
       "flaw": false
     },
     {
@@ -427,6 +430,7 @@
       "sign_stability": 0.998,
       "prevalence": 0.045454545454545456,
       "claimed_good_share": 0.6923076923076923,
+      "bad_batches": 8,
       "flaw": false
     },
     {
@@ -440,6 +444,7 @@
       "sign_stability": 0.986,
       "prevalence": 0.18475073313782991,
       "claimed_good_share": 0.9761668321747765,
+      "bad_batches": 14,
       "flaw": false
     },
     {
@@ -453,6 +458,7 @@
       "sign_stability": 0.97,
       "prevalence": 0.024926686217008796,
       "claimed_good_share": 0.0,
+      "bad_batches": 12,
       "flaw": true
     },
     {
@@ -466,6 +472,7 @@
       "sign_stability": 0.94,
       "prevalence": 0.10850439882697947,
       "claimed_good_share": 0.07868020304568528,
+      "bad_batches": 140,
       "flaw": true
     },
     {
@@ -479,6 +486,7 @@
       "sign_stability": 0.94,
       "prevalence": 0.218475073313783,
       "claimed_good_share": 0.004347826086956522,
+      "bad_batches": 105,
       "flaw": true
     },
     {
@@ -492,6 +500,7 @@
       "sign_stability": 0.896,
       "prevalence": 0.12316715542521994,
       "claimed_good_share": 0.631578947368421,
+      "bad_batches": 9,
       "flaw": false
     },
     {
@@ -505,6 +514,7 @@
       "sign_stability": 0.898,
       "prevalence": 0.2903225806451613,
       "claimed_good_share": 0.2857142857142857,
+      "bad_batches": 64,
       "flaw": false
     },
     {
@@ -518,6 +528,7 @@
       "sign_stability": 0.768,
       "prevalence": 0.030791788856304986,
       "claimed_good_share": 0.0,
+      "bad_batches": 22,
       "flaw": true
     },
     {
@@ -531,6 +542,7 @@
       "sign_stability": 0.79,
       "prevalence": 0.08797653958944282,
       "claimed_good_share": 0.37142857142857144,
+      "bad_batches": 16,
       "flaw": false
     },
     {
@@ -544,6 +556,7 @@
       "sign_stability": 0.844,
       "prevalence": 0.6906158357771262,
       "claimed_good_share": 0.6578947368421053,
+      "bad_batches": 10,
       "flaw": false
     },
     {
@@ -557,6 +570,7 @@
       "sign_stability": 0.836,
       "prevalence": 0.24926686217008798,
       "claimed_good_share": 0.022222222222222223,
+      "bad_batches": 22,
       "flaw": true
     },
     {
@@ -570,6 +584,7 @@
       "sign_stability": 0.758,
       "prevalence": 0.9442815249266863,
       "claimed_good_share": 0.9447513812154696,
+      "bad_batches": 8,
       "flaw": false
     },
     {
@@ -583,6 +598,7 @@
       "sign_stability": 0.724,
       "prevalence": 0.1935483870967742,
       "claimed_good_share": 0.9963636363636363,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -596,6 +612,7 @@
       "sign_stability": 0.746,
       "prevalence": 0.43548387096774194,
       "claimed_good_share": 0.9130434782608695,
+      "bad_batches": 2,
       "flaw": false
     },
     {
@@ -609,6 +626,7 @@
       "sign_stability": 0.766,
       "prevalence": 0.005865102639296188,
       "claimed_good_share": 0.0,
+      "bad_batches": 16,
       "flaw": true
     },
     {
@@ -622,6 +640,7 @@
       "sign_stability": 0.692,
       "prevalence": 0.6891495601173021,
       "claimed_good_share": 0.9970674486803519,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -635,6 +654,7 @@
       "sign_stability": 0.644,
       "prevalence": 0.20967741935483872,
       "claimed_good_share": 0.9887640449438202,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -648,6 +668,7 @@
       "sign_stability": 0.588,
       "prevalence": 0.18475073313782991,
       "claimed_good_share": 0.7096774193548387,
+      "bad_batches": 5,
       "flaw": false
     },
     {
@@ -661,6 +682,7 @@
       "sign_stability": 0.558,
       "prevalence": 0.06598240469208211,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -674,6 +696,7 @@
       "sign_stability": 1.0,
       "prevalence": 0.0,
       "claimed_good_share": 0.5757575757575758,
+      "bad_batches": 10,
       "flaw": false
     },
     {
@@ -687,6 +710,7 @@
       "sign_stability": 0.54,
       "prevalence": 0.4149560117302053,
       "claimed_good_share": 0.9922480620155039,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -700,6 +724,7 @@
       "sign_stability": 0.566,
       "prevalence": 0.045454545454545456,
       "claimed_good_share": 0.032432432432432434,
+      "bad_batches": 96,
       "flaw": true
     },
     {
@@ -713,6 +738,7 @@
       "sign_stability": 0.584,
       "prevalence": 0.40615835777126097,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -726,6 +752,7 @@
       "sign_stability": 0.652,
       "prevalence": 0.2697947214076246,
       "claimed_good_share": 0.4482758620689655,
+      "bad_batches": 9,
       "flaw": false
     },
     {
@@ -739,6 +766,7 @@
       "sign_stability": 0.682,
       "prevalence": 0.20821114369501467,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -752,6 +780,7 @@
       "sign_stability": 0.786,
       "prevalence": 0.29765395894428154,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -765,6 +794,7 @@
       "sign_stability": 0.734,
       "prevalence": 0.12316715542521994,
       "claimed_good_share": 0.3170731707317073,
+      "bad_batches": 11,
       "flaw": false
     },
     {
@@ -778,6 +808,7 @@
       "sign_stability": 0.888,
       "prevalence": 0.01466275659824047,
       "claimed_good_share": 0.047619047619047616,
+      "bad_batches": 12,
       "flaw": true
     },
     {
@@ -791,6 +822,7 @@
       "sign_stability": 0.85,
       "prevalence": 0.6847507331378299,
       "claimed_good_share": 0.8208955223880597,
+      "bad_batches": 11,
       "flaw": false
     },
     {
@@ -804,6 +836,7 @@
       "sign_stability": 0.878,
       "prevalence": 0.35043988269794724,
       "claimed_good_share": 0.0622568093385214,
+      "bad_batches": 112,
       "flaw": true
     },
     {
@@ -817,6 +850,7 @@
       "sign_stability": 0.914,
       "prevalence": 0.8211143695014663,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -830,6 +864,7 @@
       "sign_stability": 0.886,
       "prevalence": 0.18475073313782991,
       "claimed_good_share": 0.14606741573033707,
+      "bad_batches": 53,
       "flaw": false
     },
     {
@@ -843,6 +878,7 @@
       "sign_stability": 0.914,
       "prevalence": 0.14516129032258066,
       "claimed_good_share": 0.3673469387755102,
+      "bad_batches": 17,
       "flaw": false
     },
     {
@@ -856,6 +892,7 @@
       "sign_stability": 0.958,
       "prevalence": 0.6744868035190615,
       "claimed_good_share": 0.9702970297029703,
+      "bad_batches": 3,
       "flaw": false
     },
     {
@@ -869,6 +906,7 @@
       "sign_stability": 0.958,
       "prevalence": 0.1627565982404692,
       "claimed_good_share": 0.7972972972972973,
+      "bad_batches": 14,
       "flaw": false
     },
     {
@@ -882,6 +920,7 @@
       "sign_stability": 0.974,
       "prevalence": 0.12023460410557185,
       "claimed_good_share": 0.5402298850574713,
+      "bad_batches": 25,
       "flaw": false
     },
     {
@@ -895,6 +934,7 @@
       "sign_stability": 0.968,
       "prevalence": 0.7360703812316716,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -908,6 +948,7 @@
       "sign_stability": 0.988,
       "prevalence": 0.12463343108504399,
       "claimed_good_share": 1.0,
+      "bad_batches": 0,
       "flaw": false
     },
     {
@@ -921,6 +962,7 @@
       "sign_stability": 0.98,
       "prevalence": 0.6378299120234604,
       "claimed_good_share": 0.9897959183673469,
+      "bad_batches": 2,
       "flaw": false
     },
     {
@@ -934,6 +976,7 @@
       "sign_stability": 0.996,
       "prevalence": 0.5557184750733137,
       "claimed_good_share": 0.9887640449438202,
+      "bad_batches": 1,
       "flaw": false
     },
     {
@@ -947,6 +990,7 @@
       "sign_stability": 1.0,
       "prevalence": 0.6612903225806451,
       "claimed_good_share": 0.8780487804878049,
+      "bad_batches": 5,
       "flaw": false
     },
     {
@@ -960,6 +1004,7 @@
       "sign_stability": 0.998,
       "prevalence": 0.0747800586510264,
       "claimed_good_share": 0.05,
+      "bad_batches": 14,
       "flaw": true
     }
   ],
@@ -1341,6 +1386,7 @@
     "high_p": 0.95,
     "low_p": 0.7,
     "flaw_share": 0.9,
+    "flaw_min_batches": 10,
     "label_quantile": 0.25,
     "seed": 0
   }

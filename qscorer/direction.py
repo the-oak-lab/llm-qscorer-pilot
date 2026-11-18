@@ -10,8 +10,10 @@ One call per item and batch of its raw features says, for each raw feature, whet
 the item ("same"), the item's absence or reverse ("opposite"), or something else ("neither").
 Gemini claimed that the item's presence helps when it proposed a "same" feature as beneficial or
 an "opposite" one as detrimental, and that it harms in the other two cases. Per item, the result
-gives the counts and `claimed_good_share`: the share of its "same" and "opposite" raw features
-whose claim is that the item's presence helps.
+gives the counts, `claimed_good_share`: the share of its "same" and "opposite" raw features
+whose claim is that the item's presence helps, and `bad_batches`: the number of discovery
+batches in which at least one claim says it harms. One batch can give several raw features
+(several conditions and samples), so batches count independent evidence better than features.
 """
 from __future__ import annotations
 
@@ -77,14 +79,16 @@ def parse_relations(text: str | None, n: int) -> dict[int, str] | None:
 
 
 def item_table(rows: pd.DataFrame, checklist: list[dict]) -> pd.DataFrame:
-    """Per item: raw features, how many were judged same, opposite and neither, and the claimed direction of the item's presence."""
+    """Per item: raw features, how many were judged same, opposite and neither, the claimed direction of the item's presence, and the
+    number of discovery batches with at least one claim that it harms (the evidence behind a flaw)."""
     out = []
     for it in checklist:
         g = rows[rows["item"] == it["id"]]
         judged = g[g.relation.isin(["same", "opposite"])]
         out.append({"item": it["id"], "name": it["name"], "raw_features": len(g), "unjudged": int(g.relation.isna().sum()),
                     **{r: int((g.relation == r).sum()) for r in RELATIONS},
-                    "claimed_good_share": float((judged.claim == "good").mean()) if len(judged) else float("nan")})
+                    "claimed_good_share": float((judged.claim == "good").mean()) if len(judged) else float("nan"),
+                    "bad_batches": int(judged[judged.claim == "bad"].batch.nunique())})
     return pd.DataFrame(out)
 
 
