@@ -60,23 +60,3 @@ python scripts/predict_questions.py --model models/spacing-exp4/model.json --que
 `my-predictions/features.csv` describes the 45 features: `name`, `definition` and `criterion` (what counts as present), `coefficient` and `direction` (whether its presence predicts more or less learning), `sign_stability` (the share of bootstrap refits in which the direction held; above 0.9 is a reliable direction), `prevalence` (how common it was in the training questions) and `claimed_good_share` (how often the model that proposed the feature called it beneficial). The claimed and the fitted directions often disagree: features that make the correct option easier to pick out, such as a longer correct option or wording shared between stem and key, predict more improvement with practice, while features the model called beneficial, such as scenario-based stems and mechanistic feedback, predict less. The predictions measure improvement on the question, not understanding.
 
 The predictions are a ranking, not a calibrated score. On the data the model was trained on, the ranking correlates with observed learning at about 0.23 (Spearman) within a question bank; on a second dataset the correlation was weaker. Use them to screen and compare questions, not as a verdict on any one of them.
-
-## Review questions for teachers
-
-To give feedback to the teachers who wrote the questions, use the review instead of the prediction:
-
-```
-python scripts/review_questions.py --model models/spacing-exp4/model.json --questions my-questions.jsonl --out my-review
-```
-
-It takes the same input and settings as `predict_questions.py` and writes `my-review/report.html`. The page has one card per question, with the questions that have the most to check first. A card shows the question and each flagged problem: the words that show it, a short explanation, one way to revise, and why the problem matters. Grey tags list what the question does without judging it. `my-review/report.jsonl` holds the same content as data.
-
-The flags come from `models/spacing-exp4/review.json`, which sorts the 45 checklist features into three groups:
-
-- **Flaws:** known item-writing and feedback problems, such as a correct option that is longer than the others, wording in the stem that points to the key, or a factual error.
-- **Features:** what the question does, described without a judgement.
-- **Hidden:** features that are not shown.
-
-The groups follow item-writing guidance, not the predictor's coefficients. Several coefficients reward flaws: a longer correct option predicts more improvement, because students learn the cue. For each question with a flaw candidate, one more call checks the candidates, quotes the words and suggests a fix. The review costs about one extra call for each such question.
-
-The predicted slope is written to `my-review/internal/predictions.csv` and is not shown to teachers. Keep it, so the prediction can be compared with student data once the questions are used.
