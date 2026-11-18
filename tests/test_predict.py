@@ -4,6 +4,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from qscorer.config import PredictParams
 from qscorer.predict import apply, evaluate, feature_table, fit
@@ -45,6 +46,12 @@ def test_fit_apply_and_evaluate(tmp_path):
     assert r.model["flaws"] == ["f04"] and ft.set_index("id").flaw.tolist() == [i == "f04" for i in ft.id]
     assert abs((pred.label == "low improvement expected").mean() - 0.25) < 0.02 and set(pred.label) == {"low improvement expected", "improvement expected"}
     assert (pred.flaws == np.where(scores.f04 == 1, "f04 item 4", "")).all()
+    rel = apply(r.model, scores.iloc[:40], cutoff="relative")                      # the bottom quarter of this batch, whatever the training cutoff
+    low = rel.label == "low improvement expected"                                    # strictly below the batch's 25th percentile: at most 10, fewer with ties
+    assert (low == (rel.predicted_slope < np.quantile(rel.predicted_slope, 0.25))).all() and 8 <= low.sum() <= 10
+    assert np.allclose(rel.predicted_slope, pred.predicted_slope[:40])
+    with pytest.raises(ValueError):
+        apply(r.model, scores.iloc[:3], cutoff="relative")
     assert abs(pred.predicted_slope.mean() - np.average(slopes.slope, weights=1 / slopes.slope_sd ** 2)) < 0.05   # the pooled scale
     model = json.loads(json.dumps(r.model))                                      # serialisable
     test_scores, test_slopes = synthetic(seed=1, shift=0.5)

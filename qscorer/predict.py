@@ -11,8 +11,11 @@ pooled mean slope minus the coefficients applied to the pooled mean scores, so a
 with no item set gets a slope on the pooled scale.
 
 A new question's prediction has three parts: the predicted slope; a label, "low improvement
-expected" when the prediction is below a quantile of the training predictions (`label_quantile`,
-default the 25th percentile) and "improvement expected" otherwise; and its flaws, the checklist
+expected" when the prediction is below a cutoff and "improvement expected" otherwise; and its
+flaws. The cutoff is a quantile (`label_quantile`, default the 25th percentile) of either the
+training predictions (`fixed`, the same for every question) or the predictions of the batch
+scored together (`relative`, which matches the within-set ordering the model was fitted for,
+but needs a batch and moves when the batch changes). The flaws are the checklist
 items present in it that Gemini consistently claimed harm improvement. An item is a flaw when at
 least `flaw_share` of Gemini's claims about it say so (`claimed_good_share` from
 `scripts/run_direction.py` at most 1 - `flaw_share`) and those claims come from at least
@@ -145,18 +148,32 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
     return FitResult(model, evaluation, predictions, cv)
 
 
-def apply(model: dict, scores: pd.DataFrame, present: float = 0.5) -> pd.DataFrame:
-    """For each row of `scores`: the predicted slope, the label, and the flaws scored at least `present` ("; "-separated, id and name)."""
+def label_cutoff(model: dict, pred: np.ndarray, cutoff: str = "fixed") -> float:
+    """The prediction below which a question is labelled low: the model's quantile of the training predictions (`fixed`) or of `pred`,
+    the batch being scored (`relative`, at least 4 questions so that the quantile is at least one question)."""
+    q = model.get("params", {}).get("label_quantile", 0.25)
+    if cutoff == "fixed":
+        return model.get("label_cutoff", float(np.quantile(model["training_predictions"], q)))
+    if cutoff == "relative":
+        if len(pred) * q < 1:
+            raise ValueError(f"a relative cutoff at the {q:.0%} quantile needs at least {int(np.ceil(1 / q))} questions, got {len(pred)}")
+        return float(np.quantile(pred, q))
+    raise ValueError(f"unknown cutoff {cutoff!r}: fixed or relative")
+
+
+def apply(model: dict, scores: pd.DataFrame, present: float = 0.5, cutoff: str = "fixed") -> pd.DataFrame:
+    """For each row of `scores`: the predicted slope, the label (`cutoff` fixed or relative, see `label_cutoff`), and the flaws scored at
+    least `present` ("; "-separated, id and name)."""
     item_ids = [it["id"] for it in model["items"]]
     X = scores[item_ids].to_numpy(float)
     pred = model["intercept"] + X @ np.array([model["coefficients"][i] for i in item_ids])
-    cutoff = model.get("label_cutoff", float(np.median(model["training_predictions"])))
+    cut = label_cutoff(model, pred, cutoff)
     names = {it["id"]: it["name"] for it in model["items"]}
     flaws = model.get("flaws", [])
     s = scores.reset_index(drop=True)
     found = ["; ".join(f"{i} {names[i]}" for i in flaws if row[i] >= present) for _, row in s.iterrows()]
     return pd.DataFrame({"id": s.id.to_numpy(), "predicted_slope": pred,
-                         "label": np.where(pred < cutoff, "low improvement expected", "improvement expected"), "flaws": found})
+                         "label": np.where(pred < cut, "low improvement expected", "improvement expected"), "flaws": found})
 
 
 def feature_table(model: dict) -> pd.DataFrame:

@@ -41,7 +41,7 @@ Other fields, such as KCluster's `type`, are allowed and ignored. Leave out ques
 python scripts/predict_questions.py --model models/spacing-exp4/model.json --questions my-questions.jsonl --out my-predictions
 ```
 
-`--model` is the fitted predictor shipped in the repository, `--questions` your file, `--out` a folder for the results. One call scores one question, takes about half a minute and costs about a cent; calls run 16 at a time. If the run is interrupted, running the same command again continues where it stopped. Two optional settings: `--samples 2` scores each question twice and averages the scores; `--context "..."` replaces the sentence that tells the model how the questions are used (the default describes weekly practice sessions with feedback after each answer).
+`--model` is the fitted predictor shipped in the repository, `--questions` your file, `--out` a folder for the results. One call scores one question, takes about half a minute and costs about a cent; calls run 16 at a time. If the run is interrupted, running the same command again continues where it stopped. Three optional settings: `--cutoff` sets how the label is decided (see below); `--samples 2` scores each question twice and averages the scores; `--context "..."` replaces the sentence that tells the model how the questions are used (the default describes weekly practice sessions with feedback after each answer).
 
 ## Interpret results
 
@@ -51,11 +51,18 @@ python scripts/predict_questions.py --model models/spacing-exp4/model.json --que
 |---|---|
 | `id` | the question's id |
 | `predicted_slope` | the predicted gain in accuracy with practice, on the scale of the training data (logits of accuracy per log-attempt; the training median was 0.22) |
-| `label` | `low improvement expected` when the prediction is in the bottom quarter of the training questions' predictions (below 0.17), `improvement expected` otherwise |
+| `label` | `low improvement expected` when the prediction is below the cutoff, `improvement expected` otherwise |
 | `flaws` | the checklist items found in the question that Gemini judged harmful to improvement, with id and name, separated by `; `; empty when there are none |
 
 The checklist scores are in `my-predictions/scores.csv`, and the checklist itself, with each item's definition and whether it counts as a flaw, is in `models/spacing-exp4/features.csv`.
 
 The label and the flaws come from different sources and can disagree. The label comes from the regression fitted on student data. The flaws come from Gemini's judgement: an item is a flaw when Gemini consistently called it harmful to improvement. That means at least 90% of the features Gemini proposed for it said so, and those claims came from at least 10 separate batches of questions. Some flaws predict *more* improvement in the data, for example a correct option longer than the others: students improve on the question by learning the cue. So a question can be labelled `improvement expected` and still have flaws. The predictions measure improvement on the question, not understanding.
+
+The cutoff is set with `--cutoff`:
+
+- `--cutoff fixed` (the default): below 0.17, the 25th percentile of the predictions for the questions the model was trained on. Every question gets the same cutoff, so it works on a file with one question.
+- `--cutoff relative`: the bottom quarter of the questions in your file. This compares questions the way the model was fitted, within one question bank. It needs at least 4 questions and is more stable with 20 or more. It labels at most a quarter of the file as low, fewer when predictions tie. Adding questions to the file moves the cutoff, so earlier labels can change. Score the questions that will be used together in one file.
+
+The cutoff used is recorded in `my-predictions/summary.json`.
 
 Every training prediction is above zero, so `low improvement expected` means less improvement than most questions, not none. On the data the model was trained on, the predictions correlate with observed learning at about 0.23 (Spearman) within a question bank; on a second dataset the correlation was near zero, and the label did not pick out low-learning questions better than chance. Treat the label as a screen to check against student data, not as a verdict on any one question.
