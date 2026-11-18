@@ -168,6 +168,7 @@ class PredictParams(BaseModel):
     low_p: float = Field(0.70, description="at most this, credibly low-learning")
     flaw_share: float = Field(0.9, gt=0.5, le=1, description="an item is a flaw when at least this share of Gemini's claims about it (Stage 2.3 direction) say its presence harms improvement")
     flaw_min_batches: int = Field(10, ge=1, description="and when claims that it harms come from at least this many discovery batches")
+    flaw_present: float = Field(0.5, gt=0, le=1, description="a flaw is reported for a question when its score is at least this: half the calls for Gemini; Jev's models use 0.7 (qscorer.jev.PRESENT)")
     label_quantile: float = Field(0.25, gt=0, lt=1, description="a question whose prediction is below this quantile of the training predictions is labelled low improvement expected")
     seed: int = 0
 

@@ -16,7 +16,9 @@ flaws. The cutoff is a quantile (`label_quantile`, default the 25th percentile) 
 training predictions (`fixed`, the same for every question) or the predictions of the batch
 scored together (`relative`, which matches the within-set ordering the model was fitted for,
 but needs a batch and moves when the batch changes). The flaws are the checklist
-items present in it that Gemini consistently claimed harm improvement. An item is a flaw when at
+items present in it (scored at least `flaw_present`) that Gemini consistently claimed harm improvement. The list of
+flaws does not depend on the model that scores the questions; only the score at which a flaw counts as present does
+(half the calls for Gemini, a probability of 0.7 for Jev). An item is a flaw when at
 least `flaw_share` of Gemini's claims about it say so (`claimed_good_share` from
 `scripts/run_direction.py` at most 1 - `flaw_share`) and those claims come from at least
 `flaw_min_batches` discovery batches. The flaws come from Gemini's claims, not from the coefficients, and the
@@ -161,9 +163,10 @@ def label_cutoff(model: dict, pred: np.ndarray, cutoff: str = "fixed") -> float:
     raise ValueError(f"unknown cutoff {cutoff!r}: fixed or relative")
 
 
-def apply(model: dict, scores: pd.DataFrame, present: float = 0.5, cutoff: str = "fixed") -> pd.DataFrame:
+def apply(model: dict, scores: pd.DataFrame, present: float | None = None, cutoff: str = "fixed") -> pd.DataFrame:
     """For each row of `scores`: the predicted slope, the label (`cutoff` fixed or relative, see `label_cutoff`), and the flaws scored at
-    least `present` ("; "-separated, id and name)."""
+    least `present` ("; "-separated, id and name; default the model's `flaw_present`: 0.5 for Gemini, 0.7 for Jev)."""
+    present = model.get("params", {}).get("flaw_present", 0.5) if present is None else present
     item_ids = [it["id"] for it in model["items"]]
     X = scores[item_ids].to_numpy(float)
     pred = model["intercept"] + X @ np.array([model["coefficients"][i] for i in item_ids])

@@ -46,6 +46,9 @@ def test_fit_apply_and_evaluate(tmp_path):
     assert r.model["flaws"] == ["f04"] and ft.set_index("id").flaw.tolist() == [i == "f04" for i in ft.id]
     assert abs((pred.label == "low improvement expected").mean() - 0.25) < 0.02 and set(pred.label) == {"low improvement expected", "improvement expected"}
     assert (pred.flaws == np.where(scores.f04 == 1, "f04 item 4", "")).all()
+    graded = scores.assign(f04=0.6)                                              # a flaw counts as present at the model's flaw_present
+    assert (apply(r.model, graded).flaws == "f04 item 4").all()                  # 0.5, Gemini's half of the calls
+    assert (apply(r.model | {"params": r.model["params"] | {"flaw_present": 0.7}}, graded).flaws == "").all()   # 0.7, Jev's
     rel = apply(r.model, scores.iloc[:40], cutoff="relative")                      # the bottom quarter of this batch, whatever the training cutoff
     low = rel.label == "low improvement expected"                                    # strictly below the batch's 25th percentile: at most 10, fewer with ties
     assert (low == (rel.predicted_slope < np.quantile(rel.predicted_slope, 0.25))).all() and 8 <= low.sum() <= 10

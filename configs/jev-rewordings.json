@@ -1,0 +1,7 @@
+{
+  "_about": "Jev's wording for these checklist items, asked instead of the item's criterion and definition (qscorer/jev.py). Chosen on the jev branch (Dallas Hall, scripts/test_jev_phrasings.py), out of three rewordings each, for items where Jev read the original statement differently from Gemini.",
+  "f11": "The question sentence tells the student what kind of reasoning the answer must show (for example 'Which statement best explains...', 'Which correctly compares...', 'Which type of ... is this?', 'What will happen...').",
+  "f19": "No answer option is noticeably longer, shorter, more complex, or differently structured than the others.",
+  "f22": "Every answer choice is made of several parts that must each be checked separately, such as two paired entities, two separate values, or a sequence of steps.",
+  "f27": "A student could pick the correct option by matching a key term from the stem to the same term in that option, without understanding the concept."
+}

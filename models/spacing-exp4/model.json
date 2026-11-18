@@ -1,7 +1,8 @@
 {
   "dataset": "spacing-exp4",
-  "fitted_at": "2026-11-18T11:59:05-05:00",
+  "fitted_at": "2026-11-18T15:59:06-05:00",
   "scoring": {
+    "engine": "gemini",
     "model": "gemini-3.8-flash",
     "thinking": "medium",
     "temperature": 1.0,
@@ -1387,6 +1388,7 @@
     "low_p": 0.7,
     "flaw_share": 0.9,
     "flaw_min_batches": 10,
+    "flaw_present": 0.5,
     "label_quantile": 0.25,
     "seed": 0
   }

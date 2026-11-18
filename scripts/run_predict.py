@@ -2,8 +2,10 @@
 
 Run:  uv run python scripts/run_predict.py --dataset spacing-exp4 [--presence DIR] [--checklist FILE] [--test spacing-exp3 --test-presence DIR]
           [--baseline DIR] [--out results] [--tag NAME]
-In:   the Stage 3.2 scores, the Stage 0 slopes, the checklist, and results/<dataset>/canon/direction-items.csv (from scripts/run_direction.py:
-      the direction Gemini claimed for each item and the batches behind it, which decide the flaws)
+      The Jev model: --presence results/spacing-exp4/presence-jev --test spacing-exp3 --test-presence results/spacing-exp3/presence-jev --tag jev
+In:   the Stage 3.2 scores (Gemini's from scripts/run_presence.py or Jev's from scripts/run_presence_jev.py; the model records which, and Jev's
+      flaws count as present at a probability of 0.7), the Stage 0 slopes, the checklist, and results/<dataset>/canon/direction-items.csv (from
+      scripts/run_direction.py: the direction Gemini claimed for each item and the batches behind it, which decide the flaws for either model)
 Out:  results/<dataset>/predict[-tag]/model.json (what scripts/predict_questions.py needs), features.csv (coefficient, direction, sign
       stability, prevalence, the claimed direction and the flaw flag per item), predictions.csv (the training questions with their
       predicted slope, label and flaws), cv.csv (one row per penalty), evaluation.json (cross-validated and in-sample, the Stage 1 baseline
@@ -16,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 
 from qscorer.config import PredictParams, load_dataset_config
+from qscorer.jev import PRESENT
 from qscorer.predict import evaluate, feature_table, fit
 
 
@@ -37,9 +40,14 @@ def main():
     checklist = json.load(open(args.checklist or root / "canon" / "checklist.json"))
     scores = pd.read_csv(presence / "scores.csv")
     slopes = pd.read_csv(root / "slopes" / "slopes.csv")
-    psum = json.load(open(presence / "summary.json"))
-    scoring = {k: psum["params"][k] for k in ("model", "thinking", "temperature", "samples", "backend")} | {"context": config.prompt.context, "system": config.prompt.system}
-    params = PredictParams()
+    p = json.load(open(presence / "summary.json"))["params"]
+    engine = p.get("engine", "gemini")
+    if engine == "jev":
+        scoring = {"engine": "jev", "model": p["model"], "api": p["api"], "rewordings": p["rewordings"], "context": config.prompt.context}
+        params = PredictParams(flaw_present=PRESENT)
+    else:
+        scoring = {"engine": "gemini"} | {k: p[k] for k in ("model", "thinking", "temperature", "samples", "backend")} | {"context": config.prompt.context, "system": config.prompt.system}
+        params = PredictParams()
     direction = root / "canon" / "direction-items.csv"
     claimed = None
     if direction.exists():
@@ -55,6 +63,9 @@ def main():
     if args.test:
         tconfig = load_dataset_config(args.test)
         tpres = Path(args.test_presence) if args.test_presence else Path(args.out) / tconfig.name / "presence"
+        tengine = json.load(open(tpres / "summary.json"))["params"].get("engine", "gemini")
+        if tengine != engine:
+            raise SystemExit(f"the model is fitted on {engine} scores but {tpres} holds {tengine} scores")
         evaluation["test"] = {"dataset": tconfig.name, "presence": str(tpres)} | evaluate(result.model, pd.read_csv(tpres / "scores.csv"), pd.read_csv(Path(args.out) / tconfig.name / "slopes" / "slopes.csv"), params)
     out = root / ("predict" + (f"-{args.tag}" if args.tag else "")); out.mkdir(parents=True, exist_ok=True)
     with open(out / "model.json", "w") as f:
