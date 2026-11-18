@@ -1,6 +1,6 @@
 {
   "dataset": "spacing-exp4",
-  "fitted_at": "2026-11-03T22:53:33-05:00",
+  "fitted_at": "2026-11-18T11:08:15-05:00",
   "scoring": {
     "model": "gemini-3.8-flash",
     "thinking": "medium",
@@ -387,7 +387,8 @@
       "direction": "more learning",
       "sign_stability": 1.0,
       "prevalence": 0.19941348973607037,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 0.0,
+      "flaw": true
     },
     {
       "id": "f01",
@@ -399,7 +400,8 @@
       "direction": "more learning",
       "sign_stability": 1.0,
       "prevalence": 0.05278592375366569,
-      "claimed_good_share": 0.5153846153846153
+      "claimed_good_share": 0.9818181818181818,
+      "flaw": false
     },
     {
       "id": "f20",
@@ -411,7 +413,8 @@
       "direction": "more learning",
       "sign_stability": 0.998,
       "prevalence": 0.18181818181818182,
-      "claimed_good_share": 0.6531302876480541
+      "claimed_good_share": 0.743801652892562,
+      "flaw": false
     },
     {
       "id": "f23",
@@ -423,7 +426,8 @@
       "direction": "more learning",
       "sign_stability": 0.998,
       "prevalence": 0.045454545454545456,
-      "claimed_good_share": 0.7246376811594203
+      "claimed_good_share": 0.6923076923076923,
+      "flaw": false
     },
     {
       "id": "f44",
@@ -435,7 +439,8 @@
       "direction": "more learning",
       "sign_stability": 0.986,
       "prevalence": 0.18475073313782991,
-      "claimed_good_share": 0.3113026819923372
+      "claimed_good_share": 0.9761668321747765,
+      "flaw": false
     },
     {
       "id": "f45",
@@ -447,7 +452,8 @@
       "direction": "more learning",
       "sign_stability": 0.97,
       "prevalence": 0.024926686217008796,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 0.0,
+      "flaw": true
     },
     {
       "id": "f27",
@@ -459,7 +465,8 @@
       "direction": "more learning",
       "sign_stability": 0.94,
       "prevalence": 0.10850439882697947,
-      "claimed_good_share": 0.10244988864142539
+      "claimed_good_share": 0.07868020304568528,
+      "flaw": true
     },
     {
       "id": "f24",
@@ -471,7 +478,8 @@
       "direction": "more learning",
       "sign_stability": 0.94,
       "prevalence": 0.218475073313783,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 0.004347826086956522,
+      "flaw": true
     },
     {
       "id": "f17",
@@ -483,7 +491,8 @@
       "direction": "more learning",
       "sign_stability": 0.896,
       "prevalence": 0.12316715542521994,
-      "claimed_good_share": 0.20512820512820512
+      "claimed_good_share": 0.631578947368421,
+      "flaw": false
     },
     {
       "id": "f22",
@@ -495,7 +504,8 @@
       "direction": "more learning",
       "sign_stability": 0.898,
       "prevalence": 0.2903225806451613,
-      "claimed_good_share": 0.25161290322580643
+      "claimed_good_share": 0.2857142857142857,
+      "flaw": false
     },
     {
       "id": "f08",
@@ -507,7 +517,8 @@
       "direction": "more learning",
       "sign_stability": 0.768,
       "prevalence": 0.030791788856304986,
-      "claimed_good_share": 0.125
+      "claimed_good_share": 0.0,
+      "flaw": true
     },
     {
       "id": "f21",
@@ -519,7 +530,8 @@
       "direction": "more learning",
       "sign_stability": 0.79,
       "prevalence": 0.08797653958944282,
-      "claimed_good_share": 0.54
+      "claimed_good_share": 0.37142857142857144,
+      "flaw": false
     },
     {
       "id": "f38",
@@ -531,7 +543,8 @@
       "direction": "more learning",
       "sign_stability": 0.844,
       "prevalence": 0.6906158357771262,
-      "claimed_good_share": 1.0
+      "claimed_good_share": 0.6578947368421053,
+      "flaw": false
     },
     {
       "id": "f25",
@@ -543,7 +556,8 @@
       "direction": "more learning",
       "sign_stability": 0.836,
       "prevalence": 0.24926686217008798,
-      "claimed_good_share": 0.022222222222222223
+      "claimed_good_share": 0.022222222222222223,
+      "flaw": true
     },
     {
       "id": "f04",
@@ -555,7 +569,8 @@
       "direction": "more learning",
       "sign_stability": 0.758,
       "prevalence": 0.9442815249266863,
-      "claimed_good_share": 0.6388888888888888
+      "claimed_good_share": 0.9447513812154696,
+      "flaw": false
     },
     {
       "id": "f06",
@@ -567,7 +582,8 @@
       "direction": "more learning",
       "sign_stability": 0.724,
       "prevalence": 0.1935483870967742,
-      "claimed_good_share": 0.8506493506493507
+      "claimed_good_share": 0.9963636363636363,
+      "flaw": false
     },
     {
       "id": "f12",
@@ -579,7 +595,8 @@
       "direction": "more learning",
       "sign_stability": 0.746,
       "prevalence": 0.43548387096774194,
-      "claimed_good_share": 0.7794117647058824
+      "claimed_good_share": 0.9130434782608695,
+      "flaw": false
     },
     {
       "id": "f42",
@@ -591,7 +608,8 @@
       "direction": "more learning",
       "sign_stability": 0.766,
       "prevalence": 0.005865102639296188,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 0.0,
+      "flaw": true
     },
     {
       "id": "f34",
@@ -603,7 +621,8 @@
       "direction": "more learning",
       "sign_stability": 0.692,
       "prevalence": 0.6891495601173021,
-      "claimed_good_share": 0.988950276243094
+      "claimed_good_share": 0.9970674486803519,
+      "flaw": false
     },
     {
       "id": "f35",
@@ -615,7 +634,8 @@
       "direction": "more learning",
       "sign_stability": 0.644,
       "prevalence": 0.20967741935483872,
-      "claimed_good_share": 0.967032967032967
+      "claimed_good_share": 0.9887640449438202,
+      "flaw": false
     },
     {
       "id": "f28",
@@ -627,7 +647,8 @@
       "direction": "more learning",
       "sign_stability": 0.588,
       "prevalence": 0.18475073313782991,
-      "claimed_good_share": 0.7971014492753623
+      "claimed_good_share": 0.7096774193548387,
+      "flaw": false
     },
     {
       "id": "f13",
@@ -639,7 +660,8 @@
       "direction": "more learning",
       "sign_stability": 0.558,
       "prevalence": 0.06598240469208211,
-      "claimed_good_share": 0.08163265306122448
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f29",
@@ -651,7 +673,8 @@
       "direction": "less learning",
       "sign_stability": 1.0,
       "prevalence": 0.0,
-      "claimed_good_share": 0.5757575757575758
+      "claimed_good_share": 0.5757575757575758,
+      "flaw": false
     },
     {
       "id": "f36",
@@ -663,7 +686,8 @@
       "direction": "less learning",
       "sign_stability": 0.54,
       "prevalence": 0.4149560117302053,
-      "claimed_good_share": 0.9922480620155039
+      "claimed_good_share": 0.9922480620155039,
+      "flaw": false
     },
     {
       "id": "f41",
@@ -675,7 +699,8 @@
       "direction": "less learning",
       "sign_stability": 0.566,
       "prevalence": 0.045454545454545456,
-      "claimed_good_share": 0.078125
+      "claimed_good_share": 0.032432432432432434,
+      "flaw": true
     },
     {
       "id": "f37",
@@ -687,7 +712,8 @@
       "direction": "less learning",
       "sign_stability": 0.584,
       "prevalence": 0.40615835777126097,
-      "claimed_good_share": 0.9782608695652174
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f07",
@@ -699,7 +725,8 @@
       "direction": "less learning",
       "sign_stability": 0.652,
       "prevalence": 0.2697947214076246,
-      "claimed_good_share": 0.5
+      "claimed_good_share": 0.4482758620689655,
+      "flaw": false
     },
     {
       "id": "f39",
@@ -711,7 +738,8 @@
       "direction": "less learning",
       "sign_stability": 0.682,
       "prevalence": 0.20821114369501467,
-      "claimed_good_share": 1.0
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f40",
@@ -723,7 +751,8 @@
       "direction": "less learning",
       "sign_stability": 0.786,
       "prevalence": 0.29765395894428154,
-      "claimed_good_share": 0.9912280701754386
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f03",
@@ -735,7 +764,8 @@
       "direction": "less learning",
       "sign_stability": 0.734,
       "prevalence": 0.12316715542521994,
-      "claimed_good_share": 0.3170731707317073
+      "claimed_good_share": 0.3170731707317073,
+      "flaw": false
     },
     {
       "id": "f05",
@@ -747,7 +777,8 @@
       "direction": "less learning",
       "sign_stability": 0.888,
       "prevalence": 0.01466275659824047,
-      "claimed_good_share": 0.10344827586206896
+      "claimed_good_share": 0.047619047619047616,
+      "flaw": true
     },
     {
       "id": "f11",
@@ -759,7 +790,8 @@
       "direction": "less learning",
       "sign_stability": 0.85,
       "prevalence": 0.6847507331378299,
-      "claimed_good_share": 0.7659574468085106
+      "claimed_good_share": 0.8208955223880597,
+      "flaw": false
     },
     {
       "id": "f43",
@@ -771,7 +803,8 @@
       "direction": "less learning",
       "sign_stability": 0.878,
       "prevalence": 0.35043988269794724,
-      "claimed_good_share": 0.061068702290076333
+      "claimed_good_share": 0.0622568093385214,
+      "flaw": true
     },
     {
       "id": "f31",
@@ -783,7 +816,8 @@
       "direction": "less learning",
       "sign_stability": 0.914,
       "prevalence": 0.8211143695014663,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f09",
@@ -795,7 +829,8 @@
       "direction": "less learning",
       "sign_stability": 0.886,
       "prevalence": 0.18475073313782991,
-      "claimed_good_share": 0.34177215189873417
+      "claimed_good_share": 0.14606741573033707,
+      "flaw": false
     },
     {
       "id": "f02",
@@ -807,7 +842,8 @@
       "direction": "less learning",
       "sign_stability": 0.914,
       "prevalence": 0.14516129032258066,
-      "claimed_good_share": 0.5483870967741935
+      "claimed_good_share": 0.3673469387755102,
+      "flaw": false
     },
     {
       "id": "f32",
@@ -819,7 +855,8 @@
       "direction": "less learning",
       "sign_stability": 0.958,
       "prevalence": 0.6744868035190615,
-      "claimed_good_share": 0.9351851851851852
+      "claimed_good_share": 0.9702970297029703,
+      "flaw": false
     },
     {
       "id": "f16",
@@ -831,7 +868,8 @@
       "direction": "less learning",
       "sign_stability": 0.958,
       "prevalence": 0.1627565982404692,
-      "claimed_good_share": 0.7525773195876289
+      "claimed_good_share": 0.7972972972972973,
+      "flaw": false
     },
     {
       "id": "f26",
@@ -843,7 +881,8 @@
       "direction": "less learning",
       "sign_stability": 0.974,
       "prevalence": 0.12023460410557185,
-      "claimed_good_share": 0.5132275132275133
+      "claimed_good_share": 0.5402298850574713,
+      "flaw": false
     },
     {
       "id": "f33",
@@ -855,7 +894,8 @@
       "direction": "less learning",
       "sign_stability": 0.968,
       "prevalence": 0.7360703812316716,
-      "claimed_good_share": 0.96
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f30",
@@ -867,7 +907,8 @@
       "direction": "less learning",
       "sign_stability": 0.988,
       "prevalence": 0.12463343108504399,
-      "claimed_good_share": 0.04918032786885246
+      "claimed_good_share": 1.0,
+      "flaw": false
     },
     {
       "id": "f10",
@@ -879,7 +920,8 @@
       "direction": "less learning",
       "sign_stability": 0.98,
       "prevalence": 0.6378299120234604,
-      "claimed_good_share": 0.9779735682819384
+      "claimed_good_share": 0.9897959183673469,
+      "flaw": false
     },
     {
       "id": "f19",
@@ -891,7 +933,8 @@
       "direction": "less learning",
       "sign_stability": 0.996,
       "prevalence": 0.5557184750733137,
-      "claimed_good_share": 0.2585034013605442
+      "claimed_good_share": 0.9887640449438202,
+      "flaw": false
     },
     {
       "id": "f15",
@@ -903,7 +946,8 @@
       "direction": "less learning",
       "sign_stability": 1.0,
       "prevalence": 0.6612903225806451,
-      "claimed_good_share": 0.8409090909090909
+      "claimed_good_share": 0.8780487804878049,
+      "flaw": false
     },
     {
       "id": "f14",
@@ -915,7 +959,8 @@
       "direction": "less learning",
       "sign_stability": 0.998,
       "prevalence": 0.0747800586510264,
-      "claimed_good_share": 0.0
+      "claimed_good_share": 0.05,
+      "flaw": true
     }
   ],
   "training_predictions": [
@@ -1268,6 +1313,20 @@
     0.39492346549292073,
     0.5124217419185975
   ],
+  "label_cutoff": 0.1702771781952108,
+  "flaws": [
+    "f05",
+    "f08",
+    "f14",
+    "f18",
+    "f24",
+    "f25",
+    "f27",
+    "f41",
+    "f42",
+    "f43",
+    "f45"
+  ],
   "params": {
     "alphas": [
       0.1,
@@ -1281,6 +1340,8 @@
     ],
     "high_p": 0.95,
     "low_p": 0.7,
+    "flaw_share": 0.9,
+    "label_quantile": 0.25,
     "seed": 0
   }
 }

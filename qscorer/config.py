@@ -166,6 +166,8 @@ class PredictParams(BaseModel):
     alphas: list[float] = Field([0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0, 300.0], description="ridge penalties tried; the one with the best leave-one-set-out correlation is kept")
     high_p: float = Field(0.95, description="a question whose posterior probability of a positive slope is at least this is credibly high-learning")
     low_p: float = Field(0.70, description="at most this, credibly low-learning")
+    flaw_share: float = Field(0.9, gt=0.5, le=1, description="an item is a flaw when at least this share of Gemini's claims about it (Stage 2.3 direction) say its presence harms improvement")
+    label_quantile: float = Field(0.25, gt=0, lt=1, description="a question whose prediction is below this quantile of the training predictions is labelled low improvement expected")
     seed: int = 0
 
 

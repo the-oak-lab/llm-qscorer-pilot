@@ -1,13 +1,13 @@
-"""Predict learning for new questions: score them against the checklist with a model, apply the fitted regression.
+"""Predict learning for new questions: score them against the checklist with a model, apply the fitted regression, list their flaws.
 
 Run:  uv run python scripts/predict_questions.py --model models/spacing-exp4/model.json --questions my-questions.jsonl --out my-predictions
           [--backend openrouter|gemini] [--base-url URL] [--model-id google/gemini-3.8-flash] [--samples 1] [--concurrency 16] [--context "..."]
 In:   a JSONL file, one question per line, in the project's format:
       {"id": "q1", "question": {"stem": "...", "choices": [{"label": "a", "text": "..."}, ...]}, "answerKey": "b", "feedback-text": "..."}
-Out:  <out>/predictions.csv: id, predicted_slope (logits per log-attempt, the pooled scale of the training data), percentile among the
-      training questions, class (higher or lower than the training median), the features raising and lowering the prediction, and the
-      checklist scores; <out>/features.csv (the model's features with coefficient and direction); <out>/scores.csv, <out>/responses.jsonl
-      (raw, resumable), <out>/summary.json. Keys: OPENROUTER_API_KEY or GEMINI_API_KEY in the environment or a .env file.
+Out:  <out>/predictions.csv: id, predicted_slope (logits per log-attempt, the pooled scale of the training data), label ("improvement
+      expected", or "low improvement expected" below the model's cutoff), flaws (the checklist items present that Gemini claimed harm
+      improvement). <out>/scores.csv (the checklist scores), <out>/scores-by-call.csv, <out>/responses.jsonl (raw, resumable),
+      <out>/summary.json. Keys: OPENROUTER_API_KEY or GEMINI_API_KEY in the environment or a .env file.
 """
 import argparse
 import json
@@ -17,7 +17,7 @@ import pandas as pd
 
 from qscorer.config import PresenceParams
 from qscorer.data import load_questions
-from qscorer.predict import apply, feature_table
+from qscorer.predict import apply
 from qscorer.presence import run_presence
 
 
@@ -48,12 +48,12 @@ def main():
         json.dump(result.summary | {"model": args.model, "trained_on": model["dataset"]}, f, indent=2)
     predictions = apply(model, result.scores)
     predictions.to_csv(out / "predictions.csv", index=False)
-    feature_table(model).to_csv(out / "features.csv", index=False)
     s = result.summary
+    low = (predictions.label == "low improvement expected").sum()
     print(f"{len(predictions)} of {len(questions)} questions predicted ({s['answered']} of {s['calls']} calls answered); "
-          f"{(predictions['class'] == 'higher').sum()} higher, {(predictions['class'] == 'lower').sum()} lower")
-    pd.set_option("display.width", 200)
-    print(predictions[["id", "predicted_slope", "percentile", "class"]].round(3).head(20).to_string(index=False))
+          f"{low} low improvement expected; {(predictions.flaws != '').sum()} with flaws")
+    pd.set_option("display.width", 200); pd.set_option("display.max_colwidth", 100)
+    print(predictions.round(3).head(20).to_string(index=False))
     print(f"  wrote {out}/predictions.csv")
 
 

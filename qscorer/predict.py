@@ -10,14 +10,18 @@ the ordering of questions. The final model is refitted on every set; its interce
 pooled mean slope minus the coefficients applied to the pooled mean scores, so a new question
 with no item set gets a slope on the pooled scale.
 
-A new question's prediction: the predicted slope, its percentile among the training
-predictions, a class, "higher" when it is above the training median and "lower" otherwise,
-and the features present in it that raised or lowered the prediction (coefficient times
-score). The model also carries a feature table: each item's coefficient and direction, how
-stable the sign is over bootstrap refits, its prevalence in the training questions, and the
-direction the discovery stage claimed for it (the share of its raw features named as
-beneficial), which often disagrees with the fitted one. Evaluation against a held-out dataset: Spearman correlation overall and within
-sets, and the AUC of credibly high- against credibly low-learning questions.
+A new question's prediction has three parts: the predicted slope; a label, "low improvement
+expected" when the prediction is below a quantile of the training predictions (`label_quantile`,
+default the 25th percentile) and "improvement expected" otherwise; and its flaws, the checklist
+items present in it that Gemini claimed harm improvement. An item is a flaw when at least
+`flaw_share` of Gemini's claims about it say so (`claimed_good_share` from `scripts/run_direction.py`
+at most 1 - `flaw_share`). The flaws come from Gemini's claims, not from the coefficients, and the
+two often disagree: a longer correct option is a flaw by Gemini's claims and predicts a steeper
+slope. The model also carries a feature table: each item's coefficient and direction, how stable
+the sign is over bootstrap refits, its prevalence in the training questions, the direction
+Gemini claimed for it, and whether it is a flaw. Evaluation against a held-out dataset: Spearman
+correlation overall and within sets, and the AUC of credibly high- against credibly low-learning
+questions.
 """
 from __future__ import annotations
 
@@ -84,8 +88,9 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
         claimed: pd.Series | None = None, boot: int = 500) -> FitResult:
     """`scores`: one row per question (`id`, one column per item id). `slopes`: the Stage 0 table.
     `scoring`: how the scores were produced (model, thinking, temperature, samples, context, system), kept in the model for the tool.
-    `claimed`: per item, the share of its raw features that discovery named as beneficial (the direction the model claimed), reported
-    next to the fitted direction. The sign of each coefficient is checked over `boot` bootstrap refits."""
+    `claimed`: per item, the share of Gemini's claims that its presence helps (`claimed_good_share` from scripts/run_direction.py),
+    reported next to the fitted direction; it also decides which items are flaws. The sign of each coefficient is checked over `boot`
+    bootstrap refits."""
     item_ids = [it["id"] for it in checklist]
     t = scores.set_index("id")[item_ids].join(slopes.set_index("id")[["set", "slope", "slope_sd", "p_positive"]], how="inner").dropna(subset=["slope"])
     X = t[item_ids].to_numpy(float); y = t.slope.to_numpy(float); sets = t["set"].to_numpy()
@@ -113,9 +118,11 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
         i = rng.integers(0, len(y), len(y))
         b = ridge(demean_within(X[i], sets[i]), demean_within(y[i][:, None], sets[i])[:, 0], w[i], best)
         signs += np.sign(b) == np.sign(beta)
+    good = {i: float(claimed[i]) for i in item_ids if claimed is not None and i in claimed.index and not pd.isna(claimed[i])}
+    flaws = [i for i in item_ids if i in good and good[i] <= 1 - params.flaw_share]
     features = [{"id": it["id"], "name": it["name"], "part": it["part"], "definition": it["definition"], "criterion": it["criterion"],
                  "coefficient": float(b), "direction": "more learning" if b > 0 else "less learning", "sign_stability": float(s_ / boot),
-                 "prevalence": float(X[:, k].mean()), "claimed_good_share": (float(claimed[it["id"]]) if claimed is not None and it["id"] in claimed.index else None)}
+                 "prevalence": float(X[:, k].mean()), "claimed_good_share": good.get(it["id"]), "flaw": it["id"] in flaws}
                 for k, (it, b, s_) in enumerate(zip(checklist, beta, signs))]
     evaluation = {"training_questions": int(len(t)), "sets": {str(s): int((sets == s).sum()) for s in np.unique(sets)}, "alpha": best,
                   "cross_validated": cv[cv.alpha == best].iloc[0].to_dict(),
@@ -126,6 +133,7 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
              "intercept": intercept, "coefficients": {i: float(b) for i, b in zip(item_ids, beta)}, "alpha": best,
              "features": sorted(features, key=lambda f: -f["coefficient"]),
              "training_predictions": sorted(float(v) for v in fitted), "training_slope_quantiles": [float(np.quantile(y, q)) for q in (0.1, 0.25, 0.5, 0.75, 0.9)],
+             "label_cutoff": float(np.quantile(fitted, params.label_quantile)), "flaws": flaws,
              "params": params.model_dump(mode="json")}
     # cv_predicted_slope: each question's prediction from the model fitted without its item set; it has no intercept, so compare it within a set
     t = t.assign(cv_predicted_slope=held_out[best])
@@ -133,28 +141,23 @@ def fit(scores: pd.DataFrame, slopes: pd.DataFrame, checklist: list[dict], param
     return FitResult(model, evaluation, predictions, cv)
 
 
-def apply(model: dict, scores: pd.DataFrame) -> pd.DataFrame:
-    """Predicted slope, percentile among the training predictions, and class for each row of `scores`."""
+def apply(model: dict, scores: pd.DataFrame, present: float = 0.5) -> pd.DataFrame:
+    """For each row of `scores`: the predicted slope, the label, and the flaws scored at least `present` ("; "-separated, id and name)."""
     item_ids = [it["id"] for it in model["items"]]
     X = scores[item_ids].to_numpy(float)
     pred = model["intercept"] + X @ np.array([model["coefficients"][i] for i in item_ids])
-    train = np.asarray(model["training_predictions"])
-    pct = np.searchsorted(train, pred, side="right") / len(train)
-    median = float(np.median(train))
+    cutoff = model.get("label_cutoff", float(np.median(model["training_predictions"])))
     names = {it["id"]: it["name"] for it in model["items"]}
-    coef = np.array([model["coefficients"][i] for i in item_ids])
-    def listing(row: np.ndarray, sign: int) -> str:
-        c = row * coef
-        order = [j for j in np.argsort(-np.abs(c)) if row[j] > 0 and np.sign(c[j]) == sign]
-        return "; ".join(f"{item_ids[j]} {names[item_ids[j]]} ({c[j]:+.3f})" for j in order)
-    raising = [listing(r, 1) for r in X]; lowering = [listing(r, -1) for r in X]
-    return pd.DataFrame({"id": scores.id.to_numpy(), "predicted_slope": pred, "percentile": pct, "class": np.where(pred > median, "higher", "lower"),
-                         "raising": raising, "lowering": lowering}).join(scores[item_ids].reset_index(drop=True))
+    flaws = model.get("flaws", [])
+    s = scores.reset_index(drop=True)
+    found = ["; ".join(f"{i} {names[i]}" for i in flaws if row[i] >= present) for _, row in s.iterrows()]
+    return pd.DataFrame({"id": s.id.to_numpy(), "predicted_slope": pred,
+                         "label": np.where(pred < cutoff, "low improvement expected", "improvement expected"), "flaws": found})
 
 
 def feature_table(model: dict) -> pd.DataFrame:
     """The model's features, most positive coefficient first."""
-    return pd.DataFrame(model["features"])[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "part", "name", "definition", "criterion"]]
+    return pd.DataFrame(model["features"])[["id", "direction", "coefficient", "sign_stability", "prevalence", "claimed_good_share", "flaw", "part", "name", "definition", "criterion"]]
 
 
 def evaluate(model: dict, scores: pd.DataFrame, slopes: pd.DataFrame, params: PredictParams) -> dict:

@@ -1,6 +1,6 @@
 # llm-question-scorer
 
-Predicts how much students will improve on a multiple-choice question with practice. A model scores each question against a checklist of 45 observable features of the stem, the answer options and the feedback, and a regression fitted on classroom practice data turns the scores into a predicted learning slope, a ranking among the questions it was trained on, and the features that raised or lowered each question's prediction.
+Predicts how much students will improve on a multiple-choice question with practice. A model scores each question against a checklist of 45 observable features of the stem, the answer options and the feedback. A regression fitted on classroom practice data turns the scores into a predicted learning slope and a label. The checklist items that Gemini judged harmful and that the question has are listed as its flaws.
 
 ## Set up
 
@@ -50,13 +50,12 @@ python scripts/predict_questions.py --model models/spacing-exp4/model.json --que
 | column | meaning |
 |---|---|
 | `id` | the question's id |
-| `predicted_slope` | the predicted gain in accuracy with practice, on the scale of the training data (logits of accuracy per log-attempt; the training median was 0.24) |
-| `percentile` | where the prediction falls among the questions the model was trained on (0.90 means above 90% of them) |
-| `class` | `higher` or `lower` than the training median |
-| `raising` | the features present in this question that raised its prediction, largest effect first, with each one's contribution |
-| `lowering` | the features present that lowered it |
-| `f01` to `f45` | the question's score on each checklist feature: the share of calls that found it present (0 or 1 with one call) |
+| `predicted_slope` | the predicted gain in accuracy with practice, on the scale of the training data (logits of accuracy per log-attempt; the training median was 0.22) |
+| `label` | `low improvement expected` when the prediction is in the bottom quarter of the training questions' predictions (below 0.17), `improvement expected` otherwise |
+| `flaws` | the checklist items found in the question that Gemini judged harmful to improvement, with id and name, separated by `; `; empty when there are none |
 
-`my-predictions/features.csv` describes the 45 features: `name`, `definition` and `criterion` (what counts as present), `coefficient` and `direction` (whether its presence predicts more or less learning), `sign_stability` (the share of bootstrap refits in which the direction held; above 0.9 is a reliable direction), `prevalence` (how common it was in the training questions) and `claimed_good_share` (how often the model that proposed the feature called it beneficial). The claimed and the fitted directions often disagree: features that make the correct option easier to pick out, such as a longer correct option or wording shared between stem and key, predict more improvement with practice, while features the model called beneficial, such as scenario-based stems and mechanistic feedback, predict less. The predictions measure improvement on the question, not understanding.
+The checklist scores are in `my-predictions/scores.csv`, and the checklist itself, with each item's definition and whether it counts as a flaw, is in `models/spacing-exp4/features.csv`.
 
-The predictions are a ranking, not a calibrated score. On the data the model was trained on, the ranking correlates with observed learning at about 0.23 (Spearman) within a question bank; on a second dataset the correlation was weaker. Use them to screen and compare questions, not as a verdict on any one of them.
+The label and the flaws come from different sources and can disagree. The label comes from the regression fitted on student data. The flaws come from Gemini's judgement: an item is a flaw when at least 90% of the features Gemini proposed for it said it harms improvement. Some flaws predict *more* improvement in the data, for example a correct option longer than the others: students improve on the question by learning the cue. So a question can be labelled `improvement expected` and still have flaws. The predictions measure improvement on the question, not understanding.
+
+Every training prediction is above zero, so `low improvement expected` means less improvement than most questions, not none. On the data the model was trained on, the predictions correlate with observed learning at about 0.23 (Spearman) within a question bank; on a second dataset the correlation was near zero, and the label did not pick out low-learning questions better than chance. Treat the label as a screen to check against student data, not as a verdict on any one question.

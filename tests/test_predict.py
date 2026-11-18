@@ -26,7 +26,7 @@ def synthetic(n=240, seed=0, shift=0.0):
 def test_fit_apply_and_evaluate(tmp_path):
     scores, slopes = synthetic()
     params = PredictParams(alphas=[0.1, 1.0, 10.0, 100.0])
-    claimed = pd.Series({"f01": 0.9, "f02": 0.8})
+    claimed = pd.Series({"f01": 0.9, "f02": 0.8, "f04": 0.05, "f05": 0.2})   # f04 a flaw at flaw_share 0.9, f05 not
     r = fit(scores, slopes, ITEMS, params, {"model": "fake", "thinking": "low", "temperature": 1.0, "samples": 1, "backend": "fake", "context": "c", "system": "s"}, "synthetic", claimed, boot=100)
     coef = r.model["coefficients"]
     ft = feature_table(r.model)
@@ -40,11 +40,10 @@ def test_fit_apply_and_evaluate(tmp_path):
     within = np.mean([pd.Series(g.cv_predicted_slope).corr(g.slope, method="spearman") * len(g) for _, g in cvp.groupby("set")]) * 4 / len(cvp)
     assert abs(within - r.evaluation["cross_validated"]["cv_within_sets_spearman"]) < 1e-9   # the held-out column is what CV scored
     pred = apply(r.model, scores)
-    assert np.allclose(pred.predicted_slope, r.predictions.predicted_slope) and set(pred["class"]) == {"higher", "lower"}
-    both = pred[(scores.f01 == 1) & (scores.f02 == 1)].iloc[0]
-    assert both.raising.startswith("f01 item 1 (+0.") and both.lowering.startswith("f02 item 2 (-0.")
-    none = pred[(scores[[it["id"] for it in ITEMS]].sum(axis=1) == 0)]
-    assert len(none) == 0 or (none.raising == "").all()
+    assert np.allclose(pred.predicted_slope, r.predictions.predicted_slope) and pred.columns.tolist() == ["id", "predicted_slope", "label", "flaws"]
+    assert r.model["flaws"] == ["f04"] and ft.set_index("id").flaw.tolist() == [i == "f04" for i in ft.id]
+    assert abs((pred.label == "low improvement expected").mean() - 0.25) < 0.02 and set(pred.label) == {"low improvement expected", "improvement expected"}
+    assert (pred.flaws == np.where(scores.f04 == 1, "f04 item 4", "")).all()
     assert abs(pred.predicted_slope.mean() - np.average(slopes.slope, weights=1 / slopes.slope_sd ** 2)) < 0.05   # the pooled scale
     model = json.loads(json.dumps(r.model))                                      # serialisable
     test_scores, test_slopes = synthetic(seed=1, shift=0.5)
