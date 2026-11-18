@@ -18,13 +18,19 @@ cd llm-qscorer-pilot
 pip install -e .
 ```
 
-The scoring calls Gemini or Jev through OpenRouter. Create a file named `.env` in the `llm-qscorer-pilot` folder with your OpenRouter API key (from openrouter.ai, under Keys). The file is ignored by git, so the key stays on your machine. One OpenRouter key works for both models:
+By default the scoring calls Gemini through OpenRouter. Create a file named `.env` in the `llm-qscorer-pilot` folder with your OpenRouter API key (from openrouter.ai, under Keys). The file is ignored by git, so the key stays on your machine:
 
 ```
 OPENROUTER_API_KEY=sk-or-...
 ```
 
-To call a model's own API instead (`--api direct`), put `GEMINI_API_KEY` (from Google AI Studio) for Gemini, or `TYPESAFE_API_KEY` (from TypeSafe) for Jev, in the same file.
+To use Jev, call it through TypeSafe's own API: put your TypeSafe key in the same file and add `--api direct` when you run Jev. Jev through OpenRouter has not been tested yet.
+
+```
+TYPESAFE_API_KEY=...
+```
+
+To call Google's API for Gemini instead of OpenRouter, put `GEMINI_API_KEY` (from Google AI Studio) in the file and add `--api direct`.
 
 ## Prepare questions
 
@@ -51,10 +57,10 @@ Score every question in a file with Gemini:
 python scripts/predict_questions.py --questions my-questions.jsonl --out my-predictions
 ```
 
-Score them with Jev instead:
+Score them with Jev instead, through TypeSafe's API:
 
 ```
-python scripts/predict_questions.py --backend jev --questions my-questions.jsonl --out my-predictions-jev
+python scripts/predict_questions.py --backend jev --api direct --questions my-questions.jsonl --out my-predictions-jev
 ```
 
 Score a batch and label the bottom quarter of the batch as low:
@@ -72,7 +78,7 @@ Gemini is called once per question by default. Jev is called three times per que
 | `--questions` | your JSONL file |
 | `--out` | a folder for the results; it is created if needed |
 | `--backend` | `gemini` (the default) or `jev`: the model that scores the checklist |
-| `--api` | `openrouter` (the default, needs `OPENROUTER_API_KEY`) or `direct`: the model's own API, Google's (needs `GEMINI_API_KEY`) or TypeSafe's (needs `TYPESAFE_API_KEY`) |
+| `--api` | `openrouter` (the default, needs `OPENROUTER_API_KEY`) or `direct`: the model's own API, Google's (needs `GEMINI_API_KEY`) or TypeSafe's (needs `TYPESAFE_API_KEY`). Use `direct` for Jev: Jev through OpenRouter has not been tested yet. |
 | `--model` | the fitted predictor; by default the one that ships for the backend, `models/spacing-exp4/model.json` for Gemini and `models/spacing-exp4-jev/model.json` for Jev. A predictor fitted on one model's scores is refused with the other model. |
 | `--cutoff` | `fixed` (the default) or `relative`; how the label is decided |
 | `--samples` | calls per question, averaged; by default 1 for Gemini and 3 for Jev. With Gemini at 2, each question is scored twice and the scores averaged, which costs twice as much. |
